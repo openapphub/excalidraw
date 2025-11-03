@@ -45,7 +45,7 @@
     "workbox-window": "^7.1.0"
   },
   "engines": {
-    "node": "18.0.0 - 22.x.x"
+    "node": ">=18.0.0"
   },
   "homepage": ".",
   "prettier": "@excalidraw/prettier-config",
