@@ -338,7 +338,8 @@
     "extraTools": "More tools",
     "mermaidToExcalidraw": "Mermaid to Excalidraw",
     "convertElementType": "Toggle shape type",
-    "myCreations": "My Creations"
+    "myCreations": "My Creations",
+    "aiSettings": "AI Settings"
   },
   "bucketfill": {
     "noRegion": "Couldn't find an enclosed region to fill here.",

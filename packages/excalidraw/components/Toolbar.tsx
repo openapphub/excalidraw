@@ -22,6 +22,7 @@ import {
   bucketFillIcon,
   MagicIcon,
   mermaidLogoIcon,
+  OpenAIIcon,
   DotsIcon,
 } from "./icons";
 import {
@@ -193,6 +194,15 @@ const ExtraToolsDropdown = ({
             disabled={isToolButtonDisabled(app, "magicframe")}
           >
             {t("toolBar.magicframe")}
+          </DropdownMenu.Item>
+        )}
+        {app.props.aiEnabled !== false && (
+          <DropdownMenu.Item
+            onSelect={() => app.setOpenDialog({ name: "settings" })}
+            icon={OpenAIIcon}
+            data-testid="toolbar-magicSettings"
+          >
+            {t("toolBar.aiSettings")}
           </DropdownMenu.Item>
         )}
       </DropdownMenu.Content>

@@ -1243,6 +1243,7 @@ const ExcalidrawWrapper = () => {
             <div style={{ display: "flex", alignItems: "center" }}>
               <Sidebar.Trigger
                 name={CREATIONS_SIDEBAR_NAME}
+                tab="creations"
                 icon={LoadIcon}
                 title={t("toolBar.myCreations")}
               />

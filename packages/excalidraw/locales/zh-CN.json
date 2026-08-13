@@ -336,7 +336,8 @@
     "extraTools": "更多工具",
     "mermaidToExcalidraw": "Mermaid 至 Excalidraw",
     "convertElementType": "切换形状种类",
-    "myCreations": "我的创作"
+    "myCreations": "我的创作",
+    "aiSettings": "AI 设置"
   },
   "element": {
     "rectangle": "矩形",
