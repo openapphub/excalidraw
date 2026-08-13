@@ -1225,14 +1225,6 @@ const ExcalidrawWrapper = () => {
           let statusMessage = "";
           if (saveStatus === "saving") {
             statusMessage = t("canvas.saving");
-          } else if (saveStatus === "saved") {
-            if (lastSaveTime) {
-              statusMessage = `${t(
-                "canvas.savedAt",
-              )} ${lastSaveTime.toLocaleTimeString()}`;
-            } else {
-              statusMessage = t("canvas.unsavedChanges");
-            }
           } else if (saveStatus === "unsaved") {
             statusMessage = t("canvas.unsavedChanges");
           } else if (saveStatus === "login-required") {
