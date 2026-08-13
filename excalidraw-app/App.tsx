@@ -119,6 +119,7 @@ import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
 import { useAuth } from "./hooks/useAuth";
 import { useCanvasManagement } from "./hooks/useCanvasManagement";
+import { useAiCanvasSync } from "./hooks/useAiCanvasSync";
 import { useMagicSettings } from "./hooks/useMagicSettings";
 import {
   exportToBackend,
@@ -432,6 +433,9 @@ const ExcalidrawWrapper = () => {
 
   const [excalidrawAPI, excalidrawRefCallback] =
     useCallbackRefState<ExcalidrawImperativeAPI>();
+
+  // Live-sync the AI canvas (ai-canvas) over WebSocket when it is open.
+  useAiCanvasSync(excalidrawAPI, currentCanvasId);
 
   const magicSettings = useMagicSettings(excalidrawAPI);
 
@@ -928,6 +932,28 @@ const ExcalidrawWrapper = () => {
             appState,
             files,
           });
+          // Two-way sync: push user edits on AI canvases back to the mcp
+          // server so the CLI sees them and other viewers stay in sync.
+          // The canvasId query param is REQUIRED — the server rejects syncs
+          // without it, so an open canvas can never overwrite a different
+          // canvas that the AI is currently working on.
+          if (currentCanvasId.startsWith("ai-")) {
+            try {
+              const payload = {
+                elements: elements.map((el) => ({ ...el })),
+              };
+              await fetch(
+                `/api/elements/sync?canvasId=${encodeURIComponent(currentCanvasId)}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload),
+                },
+              );
+            } catch (e) {
+              console.error("AI canvas sync failed:", e);
+            }
+          }
           setSaveStatus("saved");
           setLastSaveTime(new Date());
           await onChangeRef.current.refreshCanvases();
