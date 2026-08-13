@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import React, {
   useEffect,
   useLayoutEffect,
@@ -8,28 +9,27 @@ import React, {
   useCallback,
 } from "react";
 
-import clsx from "clsx";
-
-import { KEYS, isDevEnv, EVENT, updateObject } from "@excalidraw/common";
-
-import { atom, useSetAtom } from "../../editor-jotai";
-
-import { Island } from "../Island";
-
-import { useDevice, useExcalidrawSetAppState } from "../App";
+import {
+  CLASSES,
+  EVENT,
+  isDevEnv,
+  KEYS,
+  updateObject,
+} from "@excalidraw/common";
 
 import { useUIAppState } from "../../context/ui-appState";
-
+import { atom, useSetAtom } from "../../editor-jotai";
 import { useOutsideClick } from "../../hooks/useOutsideClick";
-
-import { SidebarTabs } from "./SidebarTabs";
-import { SidebarTab } from "./SidebarTab";
+import { useEditorInterface, useExcalidrawSetAppState } from "../App";
+import { Island } from "../Island";
 
 import { SidebarHeader } from "./SidebarHeader";
 import { SidebarTabTrigger } from "./SidebarTabTrigger";
-import { SidebarPropsContext } from "./common";
 import { SidebarTabTriggers } from "./SidebarTabTriggers";
 import { SidebarTrigger } from "./SidebarTrigger";
+import { SidebarPropsContext } from "./common";
+import { SidebarTabs } from "./SidebarTabs";
+import { SidebarTab } from "./SidebarTab";
 
 import "./Sidebar.scss";
 
@@ -43,7 +43,7 @@ import type { SidebarProps, SidebarPropsContextValue } from "./common";
  *
  * Since we can only render one Sidebar at a time, we can use a simple flag.
  */
-export const isSidebarDockedAtom = atom<boolean | "left" | "right">(false);
+export const isSidebarDockedAtom = atom(false);
 
 export const SidebarInner = forwardRef(
   (
@@ -53,7 +53,6 @@ export const SidebarInner = forwardRef(
       onDock,
       docked,
       className,
-      position = "right",
       ...rest
     }: SidebarProps & Omit<React.RefAttributes<HTMLDivElement>, "onSelect">,
     ref: React.ForwardedRef<HTMLDivElement>,
@@ -91,20 +90,13 @@ export const SidebarInner = forwardRef(
       shouldRenderDockButton: !!onDock && docked != null,
     });
 
-    useLayoutEffect(() => {
-      setIsSidebarDockedAtom(docked ? position : false);
-      return () => {
-        setIsSidebarDockedAtom(false);
-      };
-    }, [setIsSidebarDockedAtom, docked, position]);
-
     const islandRef = useRef<HTMLDivElement>(null);
 
     useImperativeHandle(ref, () => {
       return islandRef.current!;
     });
 
-    const device = useDevice();
+    const editorInterface = useEditorInterface();
 
     const closeLibrary = useCallback(() => {
       const isDialogOpen = !!document.querySelector(".Dialog");
@@ -125,11 +117,11 @@ export const SidebarInner = forwardRef(
           if ((event.target as Element).closest(".sidebar-trigger")) {
             return;
           }
-          if (!docked || !device.editor.canFitSidebar) {
+          if (!docked || !editorInterface.canFitSidebar) {
             closeLibrary();
           }
         },
-        [closeLibrary, docked, device.editor.canFitSidebar],
+        [closeLibrary, docked, editorInterface.canFitSidebar],
       ),
     );
 
@@ -137,7 +129,7 @@ export const SidebarInner = forwardRef(
       const handleKeyDown = (event: KeyboardEvent) => {
         if (
           event.key === KEYS.ESCAPE &&
-          (!docked || !device.editor.canFitSidebar)
+          (!docked || !editorInterface.canFitSidebar)
         ) {
           closeLibrary();
         }
@@ -146,17 +138,24 @@ export const SidebarInner = forwardRef(
       return () => {
         document.removeEventListener(EVENT.KEYDOWN, handleKeyDown);
       };
-    }, [closeLibrary, docked, device.editor.canFitSidebar]);
+    }, [closeLibrary, docked, editorInterface.canFitSidebar]);
 
     return (
       <Island
         {...rest}
         className={clsx(
-          "sidebar",
-          `sidebar--${position}`,
+          CLASSES.SIDEBAR,
           { "sidebar--docked": docked },
           className,
         )}
+        // on mobile the sidebar shouldn't push the viewport around even
+        // when opened (it's treated as a temporary overlay)
+        data-viewport-ui={
+          editorInterface.formFactor !== "phone" ? "side" : undefined
+        }
+        data-viewport-ui-name={
+          editorInterface.formFactor !== "phone" ? "sidebar" : undefined
+        }
         ref={islandRef}
       >
         <SidebarPropsContext.Provider value={headerPropsRef.current}>

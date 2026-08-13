@@ -14,6 +14,7 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawTextElement,
   NonDeleted,
+  NonDeletedExcalidrawElement,
   Ordered,
   OrderedExcalidrawElement,
   SceneElementsMap,
@@ -1111,16 +1112,16 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
     inserted,
   }: Delta<ElementPartial>) =>
     !!(
-      deleted.version &&
-      inserted.version &&
       // versions are required integers
-      Number.isInteger(deleted.version) &&
-      Number.isInteger(inserted.version) &&
-      // versions should be positive, zero included
-      deleted.version >= 0 &&
-      inserted.version >= 0 &&
-      // versions should never be the same
-      deleted.version !== inserted.version
+      (
+        Number.isInteger(deleted.version) &&
+        Number.isInteger(inserted.version) &&
+        // versions should be positive, zero included
+        deleted.version! >= 0 &&
+        inserted.version! >= 0 &&
+        // versions should never be the same
+        deleted.version !== inserted.version
+      )
     );
 
   private static satisfiesUniqueInvariants = (
@@ -1191,9 +1192,10 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
           ElementsDelta.stripIrrelevantProps,
         );
 
-        // ignore updates which would "delete" already deleted element
         if (!prevElement.isDeleted) {
           removed[prevElement.id] = delta;
+        } else {
+          updated[prevElement.id] = delta;
         }
       }
     }
@@ -1221,6 +1223,8 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
         // ignore updates which would "delete" already deleted element
         if (!nextElement.isDeleted) {
           added[nextElement.id] = delta;
+        } else {
+          updated[nextElement.id] = delta;
         }
 
         continue;
@@ -1250,15 +1254,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
           continue;
         }
 
-        const strippedDeleted = ElementsDelta.stripVersionProps(delta.deleted);
-        const strippedInserted = ElementsDelta.stripVersionProps(
-          delta.inserted,
-        );
-
-        // making sure there are at least some changes and only changed version & versionNonce does not count!
-        if (Delta.isInnerDifferent(strippedDeleted, strippedInserted, true)) {
-          updated[nextElement.id] = delta;
-        }
+        updated[nextElement.id] = delta;
       }
     }
 
@@ -1372,15 +1368,8 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
           latestDelta = delta;
         }
 
-        const strippedDeleted = ElementsDelta.stripVersionProps(
-          latestDelta.deleted,
-        );
-        const strippedInserted = ElementsDelta.stripVersionProps(
-          latestDelta.inserted,
-        );
-
         // it might happen that after applying latest changes the delta itself does not contain any changes
-        if (Delta.isInnerDifferent(strippedDeleted, strippedInserted)) {
+        if (Delta.isInnerDifferent(latestDelta.deleted, latestDelta.inserted)) {
           modifiedDeltas[id] = latestDelta;
         }
       }
@@ -1980,9 +1969,13 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
     for (const element of changed.values()) {
       if (!element.isDeleted && isBindableElement(element)) {
         // TODO: with precise bindings this is quite expensive, so consider optimisation so it's only triggered when the arrow does not intersect (imprecise) element bounds
-        updateBoundElements(element, scene, {
-          changedElements: changed,
-        });
+        updateBoundElements(
+          element as NonDeletedExcalidrawElement, // NOTE: Assumed correct, no runtime check for isDeleted due to performance reasons
+          scene,
+          {
+            changedElements: changed,
+          },
+        );
       }
     }
   }
@@ -2072,14 +2065,6 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
     partial: Partial<OrderedExcalidrawElement>,
   ): ElementPartial {
     const { id, updated, ...strippedPartial } = partial;
-
-    return strippedPartial;
-  }
-
-  private static stripVersionProps(
-    partial: Partial<OrderedExcalidrawElement>,
-  ): ElementPartial {
-    const { version, versionNonce, ...strippedPartial } = partial;
 
     return strippedPartial;
   }

@@ -34,6 +34,7 @@ export const Modal: React.FC<{
 
   const handleKeydown = (event: React.KeyboardEvent) => {
     if (event.key === KEYS.ESCAPE) {
+      event.preventDefault();
       event.nativeEvent.stopImmediatePropagation();
       event.stopPropagation();
       props.onCloseRequest();
@@ -49,7 +50,6 @@ export const Modal: React.FC<{
       aria-modal="true"
       onKeyDown={handleKeydown}
       aria-labelledby={props.labelledBy}
-      data-prevent-outside-click
     >
       <div
         className="Modal__background"
@@ -57,7 +57,7 @@ export const Modal: React.FC<{
       />
       <div
         className="Modal__content"
-        style={{ "--max-width": `${props.maxWidth}px` } as React.CSSProperties}
+        style={{ "--max-width": `${props.maxWidth}px` }}
         tabIndex={0}
       >
         {props.children}

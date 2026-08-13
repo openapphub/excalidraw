@@ -20,14 +20,12 @@ const RowStack = forwardRef(
     return (
       <div
         className={clsx("Stack Stack_horizontal", className)}
-        style={
-          {
-            "--gap": gap,
-            alignItems: align,
-            justifyContent,
-            ...style,
-          } as React.CSSProperties
-        }
+        style={{
+          "--gap": gap,
+          alignItems: align,
+          justifyContent,
+          ...style,
+        }}
         ref={ref}
       >
         {children}
@@ -44,14 +42,12 @@ const ColStack = forwardRef(
     return (
       <div
         className={clsx("Stack Stack_vertical", className)}
-        style={
-          {
-            "--gap": gap,
-            justifyItems: align,
-            justifyContent,
-            ...style,
-          } as React.CSSProperties
-        }
+        style={{
+          "--gap": gap,
+          justifyItems: align,
+          justifyContent,
+          ...style,
+        }}
         ref={ref}
       >
         {children}
