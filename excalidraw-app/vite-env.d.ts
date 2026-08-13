@@ -17,6 +17,11 @@ interface ImportMetaEnv {
 
   VITE_APP_FIREBASE_CONFIG: string;
 
+  // Self-hosted: host:port of the local Firestore-compatible backend
+  // (e.g. "localhost:3002"). When set, the Firestore SDK connects over
+  // plain HTTP instead of HTTPS.
+  VITE_APP_FIRESTORE_EMULATOR_HOST: string;
+
   // whether to disable live reload / HMR. Usuaully what you want to do when
   // debugging Service Workers.
   VITE_APP_DEV_DISABLE_LIVE_RELOAD: string;

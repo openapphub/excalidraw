@@ -10,6 +10,7 @@ import { getSceneVersion } from "@excalidraw/element";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore,
+  connectFirestoreEmulator,
   doc,
   getDoc,
   runTransaction,
@@ -67,6 +68,14 @@ const _initializeFirebase = () => {
 const _getFirestore = () => {
   if (!firestore) {
     firestore = getFirestore(_initializeFirebase());
+    // Self-hosted: point Firestore at the local Go backend over plain HTTP.
+    // Without this, the SDK defaults to `ssl: true` and tries
+    // `https://<host>/v1/projects/...` which fails against our http server.
+    const emulatorHost = import.meta.env.VITE_APP_FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      const [host, port] = emulatorHost.split(":");
+      connectFirestoreEmulator(firestore, host, parseInt(port, 10));
+    }
   }
   return firestore;
 };
