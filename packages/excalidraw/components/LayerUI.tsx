@@ -234,8 +234,8 @@ const LayerUI = ({
   const renderCanvasActions = () => (
     <div style={{ position: "relative" }}>
       <div className="excalidraw-ui-top-left">
-        {renderTopLeftUI?.(false, appState)}
         <tunnels.MainMenuTunnel.Out />
+        {renderTopLeftUI?.(false, appState)}
       </div>
       {renderWelcomeScreen && <tunnels.WelcomeScreenMenuHintTunnel.Out />}
     </div>
