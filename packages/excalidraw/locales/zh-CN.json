@@ -335,7 +335,8 @@
     "hand": "抓手（平移工具）",
     "extraTools": "更多工具",
     "mermaidToExcalidraw": "Mermaid 至 Excalidraw",
-    "convertElementType": "切换形状种类"
+    "convertElementType": "切换形状种类",
+    "myCreations": "我的创作"
   },
   "element": {
     "rectangle": "矩形",
@@ -393,7 +394,11 @@
   "canvasError": {
     "cannotShowPreview": "无法显示预览",
     "canvasTooBig": "画布可能过大。",
-    "canvasTooBigTip": "提示：尝试将最远的元素移动到和其它元素更近一些。"
+    "canvasTooBigTip": "提示：尝试将最远的元素移动到和其它元素更近一些。",
+    "loadingFailed": "无法加载画布",
+    "loadingFailedDescription": "画布可能已损坏，你希望重置并创建一个新的画布吗？",
+    "resetCanvas": "重置画布",
+    "cannotLoadCanvas": "无法加载画布"
   },
   "errorSplash": {
     "headingMain": "遇到异常。请尝试<button>重新加载页面</button>。",
@@ -742,5 +747,12 @@
     "spacebar": "空格",
     "delete": "Delete",
     "mmb": "鼠标滚轮"
+  },
+  "canvas": {
+    "saving": "保存中...",
+    "saved": "已保存",
+    "savedAt": "已保存于 ",
+    "unsavedChanges": "未保存的更改",
+    "loginToSave": "登录以保存"
   }
 }

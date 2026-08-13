@@ -63,8 +63,12 @@
     "build:esm": "rimraf dist && node ../../scripts/buildBase.js && yarn gen:types"
   },
   "dependencies": {
-    "@excalidraw/common": "0.18.0",
-    "@excalidraw/math": "0.18.0",
-    "@excalidraw/fractional-indexing": "3.3.0"
+    "@excalidraw/common": "workspace:*",
+    "@excalidraw/math": "workspace:*",
+    "@excalidraw/fractional-indexing": "workspace:*",
+    "@excalidraw/laser-pointer": "workspace:*",
+    "roughjs": "4.6.4",
+    "points-on-curve": "1.0.1",
+    "perfect-freehand": "1.2.0"
   }
 }

@@ -1,33 +1,52 @@
-import {
-  loginIcon,
-  ExcalLogo,
-  eyeIcon,
-} from "@excalidraw/excalidraw/components/icons";
-import { MainMenu } from "@excalidraw/excalidraw/index";
 import React from "react";
+import { MainMenu } from "@excalidraw/excalidraw/index";
 
-import { isDevEnv } from "@excalidraw/common";
+import {
+  GithubIcon,
+  saveAs,
+  settingsIcon,
+} from "@excalidraw/excalidraw/components/icons";
+
+import DropdownMenuItemLink from "@excalidraw/excalidraw/components/dropdownMenu/DropdownMenuItemLink";
 
 import type { Theme } from "@excalidraw/element/types";
 
+import { useAtom, useSetAtom, userAtom, saveAsDialogAtom } from "../app-jotai";
 import { LanguageList } from "../app-language/LanguageList";
-import { isExcalidrawPlusSignedUser } from "../app_constants";
-
-import { saveDebugState } from "./DebugCanvas";
 
 export const AppMainMenu: React.FC<{
   onCollabDialogOpen: () => any;
   isCollaborating: boolean;
   isCollabEnabled: boolean;
   theme: Theme | "system";
+  setTheme: (theme: Theme | "system") => void;
   refresh: () => void;
+  onStorageSettingsClick: () => void;
 }> = React.memo((props) => {
+  const [user, setUser] = useAtom(userAtom);
+  const setSaveAsDialog = useSetAtom(saveAsDialogAtom);
+
+  const handleLogin = () => {
+    window.location.href = "/auth/login";
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
+    window.location.reload(); // Reload to clear all state
+  };
+
   return (
     <MainMenu>
       <MainMenu.DefaultItems.LoadScene />
       <MainMenu.DefaultItems.SaveToActiveFile />
+      <MainMenu.Item
+        onSelect={() => setSaveAsDialog({ isOpen: true })}
+        icon={saveAs}
+      >
+        Save as New Canvas...
+      </MainMenu.Item>
       <MainMenu.DefaultItems.Export />
-      <MainMenu.DefaultItems.SaveAsImage />
       {props.isCollabEnabled && (
         <MainMenu.DefaultItems.LiveCollaborationTrigger
           isCollaborating={props.isCollaborating}
@@ -39,45 +58,99 @@ export const AppMainMenu: React.FC<{
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
       <MainMenu.Separator />
-      <MainMenu.ItemLink
-        icon={ExcalLogo}
-        href={`${
-          import.meta.env.VITE_APP_PLUS_LP
-        }/plus?utm_source=excalidraw&utm_medium=app&utm_content=hamburger`}
-        className=""
+      <MainMenu.Item
+        onSelect={props.onStorageSettingsClick}
+        icon={settingsIcon}
       >
-        Excalidraw+
-      </MainMenu.ItemLink>
-      <MainMenu.DefaultItems.Socials />
-      <MainMenu.ItemLink
-        icon={loginIcon}
-        href={`${import.meta.env.VITE_APP_PLUS_APP}${
-          isExcalidrawPlusSignedUser ? "" : "/sign-up"
-        }?utm_source=signin&utm_medium=app&utm_content=hamburger`}
-        className="highlighted"
-      >
-        {isExcalidrawPlusSignedUser ? "Sign in" : "Sign up"}
-      </MainMenu.ItemLink>
-      {isDevEnv() && (
-        <MainMenu.Item
-          icon={eyeIcon}
-          onSelect={() => {
-            if (window.visualDebug) {
-              delete window.visualDebug;
-              saveDebugState({ enabled: false });
-            } else {
-              window.visualDebug = { data: [] };
-              saveDebugState({ enabled: true });
-            }
-            props?.refresh();
+        Data Source Settings...
+      </MainMenu.Item>
+      <MainMenu.Separator />
+      {user ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "0.5rem",
+            padding: "0 0.5rem",
+            width: "100%",
+            fontSize: "14px",
           }}
         >
-          Visual Debug
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              overflow: "hidden",
+              flexShrink: 1,
+            }}
+          >
+            {user.avatarUrl && (
+              <img
+                src={user.avatarUrl}
+                alt={user.login}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "50%",
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <span
+              style={{
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {user.name || user.login}
+            </span>
+          </div>
+          <button
+            onClick={handleLogout}
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              padding: "0.25rem 0.5rem",
+              borderRadius: "4px",
+              textAlign: "center",
+              color: "inherit",
+              flexShrink: 0,
+              marginRight: "1rem",
+              font: "var(--ui-font)",
+              fontSize: "14px",
+            }}
+            onMouseOver={(e) =>
+              (e.currentTarget.style.background = "var(--button-gray-1)")
+            }
+            onMouseOut={(e) =>
+              (e.currentTarget.style.background = "transparent")
+            }
+          >
+            Logout
+          </button>
+        </div>
+      ) : (
+        <MainMenu.Item onSelect={handleLogin} icon={GithubIcon}>
+          Login
         </MainMenu.Item>
       )}
       <MainMenu.Separator />
-      <MainMenu.DefaultItems.Preferences />
-      <MainMenu.DefaultItems.ToggleTheme allowSystemTheme theme={props.theme} />
+      <DropdownMenuItemLink
+        icon={GithubIcon}
+        href="https://github.com/excalidraw/excalidraw"
+        aria-label="GitHub"
+      >
+        GitHub
+      </DropdownMenuItemLink>
+      <MainMenu.Separator />
+      <MainMenu.DefaultItems.ToggleTheme
+        allowSystemTheme
+        theme={props.theme}
+      />
       <MainMenu.ItemCustom>
         <LanguageList style={{ width: "100%" }} />
       </MainMenu.ItemCustom>

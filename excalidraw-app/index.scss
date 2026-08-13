@@ -1,10 +1,14 @@
-@import "../packages/excalidraw/css/variables.module.scss";
-
 .excalidraw {
   --color-primary-contrast-offset: #625ee0; // to offset Chubb illusion
 
   &.theme--dark {
     --color-primary-contrast-offset: #726dff; // to offset Chubb illusion
+  }
+
+  .top-right-ui {
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
 
   .footer-center {
@@ -54,7 +58,7 @@
     }
   }
 
-  .alert {
+  .collab-offline-warning {
     pointer-events: none;
     position: absolute;
     top: 6.5rem;
@@ -65,18 +69,10 @@
     text-align: center;
     line-height: 1.5;
     border-radius: var(--border-radius-md);
+    background-color: var(--color-warning);
+    color: var(--color-text-warning);
     z-index: 6;
     white-space: pre;
-
-    &--warning {
-      background-color: var(--color-warning);
-      color: var(--color-text-warning);
-    }
-
-    &--danger {
-      background-color: var(--color-danger-dark);
-      color: var(--color-danger-text);
-    }
   }
 }
 
@@ -86,30 +82,21 @@
   }
 }
 
-.plus-banner {
+.plus-button {
   display: flex;
   justify-content: center;
   cursor: pointer;
   align-items: center;
   border: 1px solid var(--color-primary);
-  padding: 0.5rem 0.875rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--border-radius-lg);
   background-color: var(--island-bg-color);
+  color: var(--color-primary) !important;
   text-decoration: none !important;
 
-  font-family: var(--ui-font);
-  font-size: 0.8333rem;
+  font-size: 0.75rem;
   box-sizing: border-box;
   height: var(--lg-button-size);
-
-  border: none;
-  box-shadow: 0 0 0 1px var(--color-surface-lowest);
-  background-color: var(--color-surface-low);
-  color: var(--button-color, var(--color-on-surface)) !important;
-
-  &:active {
-    box-shadow: 0 0 0 1px var(--color-brand-active);
-  }
 
   &:hover {
     background-color: var(--color-primary);
@@ -122,7 +109,7 @@
 }
 
 .theme--dark {
-  .plus-banner {
+  .plus-button {
     &:hover {
       color: black !important;
     }

@@ -8,6 +8,10 @@ import {
   IV_LENGTH_BYTES,
 } from "@excalidraw/excalidraw/data/encryption";
 import { serializeAsJSON } from "@excalidraw/excalidraw/data/json";
+import {
+  restoreAppState,
+  restoreElements,
+} from "@excalidraw/excalidraw/data/restore";
 import { isInvisiblySmallElement } from "@excalidraw/element";
 import { isInitializedImageElement } from "@excalidraw/element";
 import { t } from "@excalidraw/excalidraw/i18n";
@@ -83,13 +87,13 @@ export type SocketUpdateDataSource = {
   SCENE_INIT: {
     type: WS_SUBTYPES.INIT;
     payload: {
-      elements: readonly OrderedExcalidrawElement[];
+      elements: readonly ExcalidrawElement[];
     };
   };
   SCENE_UPDATE: {
     type: WS_SUBTYPES.UPDATE;
     payload: {
-      elements: readonly OrderedExcalidrawElement[];
+      elements: readonly ExcalidrawElement[];
     };
   };
   MOUSE_LOCATION: {
@@ -131,18 +135,28 @@ export type SocketUpdateData =
 const RE_COLLAB_LINK = /^#room=([a-zA-Z0-9_-]+),([a-zA-Z0-9_-]+)$/;
 
 export const isCollaborationLink = (link: string) => {
-  const hash = new URL(link).hash;
-  return RE_COLLAB_LINK.test(hash);
+  try {
+    const hash = new URL(link).hash;
+    return RE_COLLAB_LINK.test(hash);
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
 };
 
 export const getCollaborationLinkData = (link: string) => {
-  const hash = new URL(link).hash;
-  const match = hash.match(RE_COLLAB_LINK);
-  if (match && match[2].length !== 22) {
-    window.alert(t("alerts.invalidEncryptionKey"));
+  try {
+    const hash = new URL(link).hash;
+    const match = hash.match(RE_COLLAB_LINK);
+    if (match && match[2].length !== 22) {
+      window.alert(t("alerts.invalidEncryptionKey"));
+      return null;
+    }
+    return match ? { roomId: match[1], roomKey: match[2] } : null;
+  } catch (error) {
+    console.error(error);
     return null;
   }
-  return match ? { roomId: match[1], roomKey: match[2] } : null;
 };
 
 export const generateCollaborationLinkData = async () => {
@@ -199,7 +213,7 @@ const legacy_decodeFromBackend = async ({
   };
 };
 
-export const importFromBackend = async (
+const importFromBackend = async (
   id: string,
   decryptionKey: string,
 ): Promise<ImportedDataState> => {
@@ -241,6 +255,49 @@ export const importFromBackend = async (
   }
 };
 
+export const loadScene = async (
+  id: string | null,
+  privateKey: string | null,
+  // Supply local state even if importing from backend to ensure we restore
+  // localStorage user settings which we do not persist on server.
+  // Non-optional so we don't forget to pass it even if `undefined`.
+  localDataState: ImportedDataState | undefined | null,
+) => {
+  let data;
+  if (id != null && privateKey != null) {
+    // the private key is used to decrypt the content from the server, take
+    // extra care not to leak it
+    const imported = await importFromBackend(id, privateKey);
+    data = {
+      elements: restoreElements(imported.elements, localDataState?.elements, {
+        repairBindings: true,
+        refreshDimensions: false,
+        deleteInvisibleElements: true,
+      }),
+      appState: restoreAppState(imported.appState, localDataState?.appState),
+      files: imported.files,
+    };
+  } else {
+    data = {
+      elements: restoreElements(localDataState?.elements, null, {
+        repairBindings: true,
+        deleteInvisibleElements: true,
+      }),
+      appState: restoreAppState(localDataState?.appState, null),
+      files: localDataState?.files,
+    };
+  }
+
+  return {
+    elements: data.elements,
+    appState: data.appState,
+    // note: this will always be empty because we're not storing files
+    // in the scene database/localStorage, and instead fetch them async
+    // from a different database
+    files: data.files ?? {},
+  };
+};
+
 type ExportToBackendResult =
   | { url: null; errorMessage: string }
   | { url: string; errorMessage: null };
@@ -275,7 +332,7 @@ export const exportToBackend = async (
 
     const response = await fetch(BACKEND_V2_POST, {
       method: "POST",
-      body: payload.buffer,
+      body: payload.buffer as ArrayBuffer,
     });
     const json = await response.json();
     if (json.id) {
