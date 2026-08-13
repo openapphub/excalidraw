@@ -438,7 +438,10 @@
     "link_button": "导出链接",
     "excalidrawplus_description": "将画布保存到您的 Excalidraw+ 工作区。",
     "excalidrawplus_button": "导出",
-    "excalidrawplus_exportError": "暂时无法导出到 Excalidraw+ ..."
+    "excalidrawplus_exportError": "暂时无法导出到 Excalidraw+ ...",
+    "copy_title": "复制 JSON",
+    "copy_details": "将场景数据以 JSON 格式复制到剪贴板。",
+    "copy_button": "复制到剪贴板"
   },
   "helpDialog": {
     "blog": "浏览我们的博客",

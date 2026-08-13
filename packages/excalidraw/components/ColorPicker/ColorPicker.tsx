@@ -59,7 +59,7 @@ interface ColorPickerProps {
   elements: readonly ExcalidrawElement[];
   appState: UIAppState;
   palette?: ColorPaletteCustom | null;
-  topPicks?: ColorTuple;
+  topPicks?: readonly string[];
   updateData: (formData?: any) => void;
   /** palette colors to hide from the popup, keeping hotkey positions */
   excludedColors?: readonly string[];

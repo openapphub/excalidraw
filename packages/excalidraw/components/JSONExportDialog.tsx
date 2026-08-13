@@ -5,6 +5,7 @@ import { getFrame } from "@excalidraw/common";
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
 import { actionSaveFileToDisk } from "../actions/actionExport";
+import { serializeAsJSON } from "../data/json";
 
 import { trackEvent } from "../analytics";
 import { nativeFileSystemSupported } from "../data/filesystem";
@@ -70,6 +71,29 @@ const JSONExportModal = ({
             />
           </Card>
         )}
+        <Card color="primary">
+          <div className="Card-icon">{exportToFileIcon}</div>
+          <h2>{t("exportDialog.copy_title")}</h2>
+          <div className="Card-details">{t("exportDialog.copy_details")}</div>
+          <IconButton
+            className="Card-button"
+            type="button"
+            title={t("exportDialog.copy_button")}
+            aria-label={t("exportDialog.copy_button")}
+            showAriaLabel={true}
+            onClick={async () => {
+              try {
+                const json = serializeAsJSON(elements, appState, files, "local");
+                await navigator.clipboard.writeText(json);
+                setAppState({
+                  toast: { message: t("toast.copyToClipboard") },
+                });
+              } catch (error: any) {
+                setAppState({ errorMessage: error.message });
+              }
+            }}
+          />
+        </Card>
         {onExportToBackend && (
           <Card color="pink">
             <div className="Card-icon">{LinkIcon}</div>

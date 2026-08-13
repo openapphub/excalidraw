@@ -444,7 +444,10 @@
     "link_button": "Export to Link",
     "excalidrawplus_description": "Save the scene to your Excalidraw+ workspace.",
     "excalidrawplus_button": "Export",
-    "excalidrawplus_exportError": "Couldn't export to Excalidraw+ at this moment..."
+    "excalidrawplus_exportError": "Couldn't export to Excalidraw+ at this moment...",
+    "copy_title": "Copy JSON",
+    "copy_details": "Copy the scene data as JSON to the clipboard.",
+    "copy_button": "Copy to Clipboard"
   },
   "helpDialog": {
     "blog": "Read our blog",

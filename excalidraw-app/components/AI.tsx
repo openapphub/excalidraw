@@ -169,11 +169,24 @@ export const AIComponents = ({
 
           const url = `${apiURL}/chat/completions`;
           const isRelativePath = url.startsWith("/");
-          const response = await fetch(url, {
+          // Mixed-content workaround: when the page is served over http and
+          // the AI base URL is https, the browser blocks the direct fetch.
+          // Route through the local Go proxy (/api/v2/chat/completions) and
+          // pass the real target in X-AI-Base-URL; the proxy calls https
+          // server-side.
+          const isMixedContent =
+            window.location.protocol === "http:" && url.startsWith("https:");
+          const effectiveUrl = isMixedContent
+            ? "/api/v2/chat/completions"
+            : url;
+          const response = await fetch(effectiveUrl, {
             method: "POST",
             headers: {
               Accept: "application/json",
               "Content-Type": "application/json",
+              ...(isMixedContent
+                ? { "X-AI-Base-URL": apiURL }
+                : {}),
               Authorization: `Bearer ${
                 isRelativePath
                   ? localStorage.getItem("token") || apiKey
@@ -249,10 +262,18 @@ export const AIComponents = ({
             const payload = buildOpenAIPayload(messages, modelName);
             const url = `${apiUrl}/chat/completions`;
             const isRelativePath = url.startsWith("/");
-            const response = await fetch(url, {
+            // Mixed-content workaround (same as diagram-to-code above):
+            // route https AI targets through the local Go proxy.
+            const isMixedContent =
+              window.location.protocol === "http:" && url.startsWith("https:");
+            const effectiveUrl = isMixedContent
+              ? "/api/v2/chat/completions"
+              : url;
+            const response = await fetch(effectiveUrl, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
+                ...(isMixedContent ? { "X-AI-Base-URL": apiUrl } : {}),
                 Authorization: `Bearer ${
                   isRelativePath
                     ? localStorage.getItem("token") || apiKey

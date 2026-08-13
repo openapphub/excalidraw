@@ -1,6 +1,7 @@
 .my-creations-tab {
   padding: 1rem;
   height: 100%;
+  min-height: 0; /* flex child: allow shrink so overflow-y scrolls */
   overflow-y: auto;
 
   &__grid {

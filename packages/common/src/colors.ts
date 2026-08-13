@@ -275,7 +275,13 @@ export const DEFAULT_CANVAS_BACKGROUND_PICKS = [
   "#fffce8",
   // radix bronze2
   "#fdf8f6",
-] as ColorTuple;
+  // self-hosted extras: more visible canvas tints (2026-08)
+  "#e7f5ff",
+  "#ebfbee",
+  "#fff4e6",
+  "#f3f0ff",
+  "#ffe3e3",
+] as readonly string[];
 
 // palette defaults
 // -----------------------------------------------------------------------------
