@@ -137,7 +137,9 @@ export const AIComponents = ({
 
           const body = {
             model: modelName,
-            max_tokens: 4096,
+            // modern models have large context windows; 4096 was from the
+            // GPT-4V era. 16384 is plenty for diagram-to-code HTML output.
+            max_tokens: 16384,
             temperature: 0.1,
             messages: [
               {
@@ -188,9 +190,11 @@ export const AIComponents = ({
                 ? { "X-AI-Base-URL": apiURL }
                 : {}),
               Authorization: `Bearer ${
-                isRelativePath
-                  ? localStorage.getItem("token") || apiKey
-                  : apiKey
+                isMixedContent
+                  ? apiKey // mixed-content path: send the user's OpenAI key
+                  : isRelativePath
+                    ? localStorage.getItem("token") || apiKey
+                    : apiKey
               }`,
             },
             body: JSON.stringify(body),
@@ -275,9 +279,11 @@ export const AIComponents = ({
                 "Content-Type": "application/json",
                 ...(isMixedContent ? { "X-AI-Base-URL": apiUrl } : {}),
                 Authorization: `Bearer ${
-                  isRelativePath
-                    ? localStorage.getItem("token") || apiKey
-                    : apiKey
+                  isMixedContent
+                    ? apiKey // mixed-content path: user's OpenAI key
+                    : isRelativePath
+                      ? localStorage.getItem("token") || apiKey
+                      : apiKey
                 }`,
               },
               body: JSON.stringify(payload),

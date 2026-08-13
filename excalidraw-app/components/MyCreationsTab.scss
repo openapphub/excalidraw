@@ -9,6 +9,7 @@
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 1rem;
     margin-top: 1rem;
+    height: 100%; /* let the grid fill the tab, enabling scroll below */
   }
 
   &__empty {
