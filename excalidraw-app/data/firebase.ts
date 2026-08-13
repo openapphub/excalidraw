@@ -16,7 +16,7 @@ import {
   runTransaction,
   Bytes,
 } from "firebase/firestore";
-import { getStorage, ref, uploadBytes } from "firebase/storage";
+import { getStorage, ref, uploadBytes, connectStorageEmulator } from "firebase/storage";
 
 import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
 import type {
@@ -83,6 +83,14 @@ const _getFirestore = () => {
 const _getStorage = () => {
   if (!firebaseStorage) {
     firebaseStorage = getStorage(_initializeFirebase());
+    // Self-hosted: point Storage at the local Go backend over plain HTTP
+    // (same host as Firestore). Without this the SDK uses https + the
+    // firebasestorage.googleapis.com host and uploads fail.
+    const host = import.meta.env.VITE_APP_FIRESTORE_EMULATOR_HOST;
+    if (host) {
+      const [h, p] = host.split(":");
+      connectStorageEmulator(firebaseStorage, h, Number(p));
+    }
   }
   return firebaseStorage;
 };
@@ -291,9 +299,13 @@ export const loadFilesFromFirebase = async (
   await Promise.all(
     [...new Set(filesIds)].map(async (id) => {
       try {
-        const url = `https://firebasestorage.googleapis.com/v0/b/${
-          FIREBASE_CONFIG.storageBucket
-        }/o/${encodeURIComponent(prefix.replace(/^\//, ""))}%2F${id}`;
+        // Self-hosted: download from the local Go backend instead of
+        // firebasestorage.googleapis.com (which doesn't exist here).
+        const storageHost = import.meta.env.VITE_APP_FIRESTORE_EMULATOR_HOST;
+        const base = storageHost
+          ? `http://${storageHost}/v0/b/${FIREBASE_CONFIG.storageBucket}`
+          : `https://firebasestorage.googleapis.com/v0/b/${FIREBASE_CONFIG.storageBucket}`;
+        const url = `${base}/o/${encodeURIComponent(prefix.replace(/^\//, ""))}%2F${id}`;
         const response = await fetch(`${url}?alt=media`);
         if (response.status < 400) {
           const arrayBuffer = await response.arrayBuffer();
