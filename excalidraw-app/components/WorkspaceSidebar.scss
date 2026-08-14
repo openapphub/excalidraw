@@ -490,40 +490,20 @@
 }
 
 /* =============================================================================
- * 对话框（复刻 AstraDraw CreateCollectionDialog）
+ * 对话框内容（官方 Dialog 内使用，复刻 AstraDraw CreateCollectionDialog）
  * =========================================================================== */
-.ws-dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
 .ws-dialog {
-  background: var(--island-bg-color, #fff);
-  border-radius: 12px;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 400px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-
-  h3 {
-    margin: 0 0 1.25rem;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--text-primary-color, #1b1b1f);
-  }
-
   &__content {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    min-width: 320px;
+  }
+
+  &__desc {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary-color, #6b6b6b);
   }
 
   &__form-group {
@@ -537,7 +517,8 @@
       color: var(--text-secondary-color, #6b6b6b);
     }
 
-    input {
+    input,
+    select {
       padding: 0.625rem 0.75rem;
       background: var(--default-bg-color, #f5f5f5);
       border: 1px solid transparent;

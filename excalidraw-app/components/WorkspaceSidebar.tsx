@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from "react";
 
 import clsx from "clsx";
 
+import { Dialog } from "@excalidraw/excalidraw/components/Dialog";
 import { FilledButton } from "@excalidraw/excalidraw/components/FilledButton";
 
 import {
@@ -11,7 +12,6 @@ import {
   pencilIcon,
   searchIcon,
   chevronDownIcon,
-  chevronRight,
 } from "@excalidraw/excalidraw/components/icons";
 
 import { timeAgo } from "../utils/time";
@@ -78,25 +78,26 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     () => new Set(),
   );
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const [moveMenuFor, setMoveMenuFor] = useState<string | null>(null);
+  // 全局"移动到"弹窗的目标画布（官方 Dialog，居中显示）。
+  const [moveTarget, setMoveTarget] = useState<CanvasMetadata | null>(null);
+  const [moveTargetId, setMoveTargetId] = useState("");
 
-  // 菜单区域判定：document mousedown 时检查 target 是否在任一菜单内。
+  // 菜单区域判定：document mousedown 时检查 target 是否在菜单内。
   // 不用共享 ref（多个卡片 → 竞态）；菜单关闭交给 click 层（stopPropagation）
   // + 这里只负责"点到菜单外关闭"。
   useEffect(() => {
-    if (!menuFor && !moveMenuFor) {
+    if (!menuFor) {
       return;
     }
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       if (!target.closest(".ws-card__menu, .ws-card__menu-trigger")) {
         setMenuFor(null);
-        setMoveMenuFor(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [menuFor, moveMenuFor]);
+  }, [menuFor]);
 
   const sortedCanvases = useMemo(
     () =>
@@ -215,7 +216,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
           onClick={(e) => {
             e.stopPropagation();
             setMenuFor(menuFor === canvas.id ? null : canvas.id);
-            setMoveMenuFor(null);
           }}
         >
           {DotsIcon}
@@ -236,40 +236,17 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               {pencilIcon}
               <span>重命名</span>
             </button>
-            <div className="ws-card__menu-item--relative">
-              <button
-                className="ws-card__menu-item"
-                onClick={() => {
-                  setMoveMenuFor(moveMenuFor === canvas.id ? null : canvas.id);
-                }}
-              >
-                {chevronRight}
-                <span>移动到…</span>
-              </button>
-              {moveMenuFor === canvas.id && (
-                <div className="ws-card__menu ws-card__menu--sub">
-                  {workspaces
-                    .filter((ws) => ws.id !== canvas.workspaceId)
-                    .map((ws) => (
-                      <button
-                        key={ws.id}
-                        className="ws-card__menu-item"
-                        onClick={() => {
-                          setMenuFor(null);
-                          setMoveMenuFor(null);
-                          onMoveCanvas(canvas.id, ws.id);
-                        }}
-                      >
-                        <span>{ws.name}</span>
-                      </button>
-                    ))}
-                  {workspaces.filter((ws) => ws.id !== canvas.workspaceId)
-                    .length === 0 && (
-                    <div className="ws-card__menu-empty">没有其他分组</div>
-                  )}
-                </div>
-              )}
-            </div>
+            <button
+              className="ws-card__menu-item"
+              onClick={() => {
+                setMenuFor(null);
+                setMoveTarget(canvas);
+                setMoveTargetId(canvas.workspaceId);
+              }}
+            >
+              {TrashIcon}
+              <span>移动到…</span>
+            </button>
             <div className="ws-card__menu-divider" />
             <button
               className="ws-card__menu-item ws-card__menu-item--danger"
@@ -429,97 +406,138 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
         </FilledButton>
       </div>
 
-      {/* 新建分组对话框 */}
+      {/* 新建分组对话框（官方 Dialog 全局居中） */}
       {showCreateWorkspace && (
-        <div
-          className="ws-dialog-overlay"
-          onClick={() => setShowCreateWorkspace(false)}
+        <Dialog
+          onCloseRequest={() => setShowCreateWorkspace(false)}
+          title="新建分组"
         >
-          <div className="ws-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>新建分组</h3>
-            <div className="ws-dialog__content">
-              <div className="ws-dialog__form-group">
-                <label>分组名称</label>
-                <input
-                  autoFocus
-                  value={newWorkspaceName}
-                  placeholder="例如：项目A、灵感收集…"
-                  onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleCreateWorkspace();
-                    }
-                  }}
-                />
-              </div>
-              <div className="ws-dialog__form-group">
-                <label>备注（可选）</label>
-                <input
-                  value={newWorkspaceNote}
-                  placeholder="这个分组放什么…"
-                  onChange={(e) => setNewWorkspaceNote(e.target.value)}
-                />
-              </div>
+          <div className="ws-dialog__content">
+            <div className="ws-dialog__form-group">
+              <label>分组名称</label>
+              <input
+                autoFocus
+                value={newWorkspaceName}
+                placeholder="例如：项目A、灵感收集…"
+                onChange={(e) => setNewWorkspaceName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleCreateWorkspace();
+                  }
+                }}
+              />
             </div>
-            <div className="ws-dialog__actions">
-              <button
-                className="ws-dialog__cancel"
-                onClick={() => setShowCreateWorkspace(false)}
-              >
-                取消
-              </button>
-              <button
-                className="ws-dialog__confirm"
-                disabled={!newWorkspaceName.trim()}
-                onClick={handleCreateWorkspace}
-              >
-                创建
-              </button>
+            <div className="ws-dialog__form-group">
+              <label>备注（可选）</label>
+              <input
+                value={newWorkspaceNote}
+                placeholder="这个分组放什么…"
+                onChange={(e) => setNewWorkspaceNote(e.target.value)}
+              />
             </div>
           </div>
-        </div>
+          <div className="ws-dialog__actions">
+            <button
+              className="ws-dialog__cancel"
+              onClick={() => setShowCreateWorkspace(false)}
+            >
+              取消
+            </button>
+            <button
+              className="ws-dialog__confirm"
+              disabled={!newWorkspaceName.trim()}
+              onClick={handleCreateWorkspace}
+            >
+              创建
+            </button>
+          </div>
+        </Dialog>
       )}
 
-      {/* 重命名分组对话框 */}
+      {/* 重命名分组对话框（官方 Dialog 全局居中） */}
       {renamingWorkspace && (
-        <div
-          className="ws-dialog-overlay"
-          onClick={() => setRenamingWorkspace(null)}
+        <Dialog
+          onCloseRequest={() => setRenamingWorkspace(null)}
+          title="重命名分组"
         >
-          <div className="ws-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3>重命名分组</h3>
-            <div className="ws-dialog__content">
-              <div className="ws-dialog__form-group">
-                <label>分组名称</label>
-                <input
-                  autoFocus
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleRenameWorkspaceSubmit();
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            <div className="ws-dialog__actions">
-              <button
-                className="ws-dialog__cancel"
-                onClick={() => setRenamingWorkspace(null)}
-              >
-                取消
-              </button>
-              <button
-                className="ws-dialog__confirm"
-                disabled={!renameValue.trim()}
-                onClick={handleRenameWorkspaceSubmit}
-              >
-                保存
-              </button>
+          <div className="ws-dialog__content">
+            <div className="ws-dialog__form-group">
+              <label>分组名称</label>
+              <input
+                autoFocus
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleRenameWorkspaceSubmit();
+                  }
+                }}
+              />
             </div>
           </div>
-        </div>
+          <div className="ws-dialog__actions">
+            <button
+              className="ws-dialog__cancel"
+              onClick={() => setRenamingWorkspace(null)}
+            >
+              取消
+            </button>
+            <button
+              className="ws-dialog__confirm"
+              disabled={!renameValue.trim()}
+              onClick={handleRenameWorkspaceSubmit}
+            >
+              保存
+            </button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* 移动到分组对话框（官方 Dialog 全局居中，复刻 AstraDraw CopyMoveDialog） */}
+      {moveTarget && (
+        <Dialog
+          onCloseRequest={() => setMoveTarget(null)}
+          title="移动到分组"
+        >
+          <div className="ws-dialog__content">
+            <p className="ws-dialog__desc">
+              将「{moveTarget.name}」移动到分组：
+            </p>
+            <div className="ws-dialog__form-group">
+              <select
+                value={moveTargetId}
+                onChange={(e) => setMoveTargetId(e.target.value)}
+              >
+                <option value="">选择分组…</option>
+                {workspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="ws-dialog__actions">
+            <button
+              className="ws-dialog__cancel"
+              onClick={() => setMoveTarget(null)}
+            >
+              取消
+            </button>
+            <button
+              className="ws-dialog__confirm"
+              disabled={!moveTargetId || moveTargetId === moveTarget.workspaceId}
+              onClick={() => {
+                if (moveTarget) {
+                  onMoveCanvas(moveTarget.id, moveTargetId);
+                }
+                setMoveTarget(null);
+              }}
+            >
+              移动
+            </button>
+          </div>
+        </Dialog>
       )}
     </div>
   );
