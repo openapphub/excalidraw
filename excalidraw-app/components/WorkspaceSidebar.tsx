@@ -16,9 +16,8 @@ import {
 
 import { timeAgo } from "../utils/time";
 
-import { useAtom, useSetAtom } from "../app-jotai";
+import { useSetAtom } from "../app-jotai";
 import {
-  workspaceSidebarOpenAtom,
   createCanvasDialogAtom,
   renameCanvasDialogAtom,
 } from "../app-jotai";
@@ -43,12 +42,9 @@ interface WorkspaceSidebarProps {
 }
 
 /**
- * 左侧滑出式 Workspaces 画布目录（复刻 AstraDraw WorkspaceSidebar 布局与
- * SceneCard 视觉语言）。固定在页面左侧，margin-left 滑出动画，自带遮罩。
- *
- * 结构（自上而下）：触发器按钮 → header（标题 + 新建分组）→ 分组选择 →
- * 搜索框 → 分组画布列表（SceneCard 风格：缩略图 + 名称 + 时间 + 三点菜单）→
- * 底部新建画布按钮。
+ * Workspaces 画布目录内容（放在官方 Sidebar 抽屉内，位置/大小/动画由
+ * 官方 Sidebar 体系管理 —— 之前自绘 fixed 面板定位错乱导致点击不到）。
+ * 结构：分组选择 → 搜索框 → 分组画布列表（SceneCard 风格）→ 底部新建画布。
  *
  * 菜单事件用 closest() 判断而非共享 ref —— 多个卡片共用 ref 会指向最后
  * 挂载的元素，mousedown 判定"外部"提前卸载菜单 → click 丢失（2026-08
@@ -68,7 +64,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onMoveCanvas,
   onCreateCanvas,
 }) => {
-  const [isOpen, setIsOpen] = useAtom(workspaceSidebarOpenAtom);
   const setCreateCanvasDialog = useSetAtom(createCanvasDialogAtom);
   const setRenameCanvasDialog = useSetAtom(renameCanvasDialogAtom);
 
@@ -195,7 +190,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
       onClick={() => {
         if (canvas.id !== currentCanvasId) {
           onCanvasSelect(canvas.id);
-          setIsOpen(false);
         }
       }}
     >
@@ -227,10 +221,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
           {DotsIcon}
         </button>
         {menuFor === canvas.id && (
-          <div
-            className="ws-card__menu"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="ws-card__menu" onClick={(e) => e.stopPropagation()}>
             <button
               className="ws-card__menu-item"
               onClick={() => {
@@ -249,9 +240,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               <button
                 className="ws-card__menu-item"
                 onClick={() => {
-                  setMoveMenuFor(
-                    moveMenuFor === canvas.id ? null : canvas.id,
-                  );
+                  setMoveMenuFor(moveMenuFor === canvas.id ? null : canvas.id);
                 }}
               >
                 {chevronRight}
@@ -299,270 +288,240 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   );
 
   return (
-    <>
-      {/* 触发器按钮（左上角，官方 hamburger 之前） */}
-      <button
-        type="button"
-        className={clsx("ws-trigger", {
-          "ws-trigger--active": isOpen,
-        })}
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label="画布目录"
-        title="画布目录"
-      >
-        <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-          <path
-            d="M14.807 9.249a.75.75 0 0 0-1.059-.056l-2.5 2.25a.75.75 0 0 0 0 1.114l2.5 2.25a.75.75 0 0 0 1.004-1.115l-1.048-.942h3.546a.75.75 0 1 0 0-1.5h-3.546l1.048-.942a.75.75 0 0 0 .055-1.059ZM2 17.251A2.75 2.75 0 0 0 4.75 20h14.5A2.75 2.75 0 0 0 22 17.25V6.75A2.75 2.75 0 0 0 19.25 4H4.75A2.75 2.75 0 0 0 2 6.75v10.5Zm2.75 1.25c-.69 0-1.25-.56-1.25-1.25V6.749c0-.69.56-1.25 1.25-1.25h3.254V18.5H4.75Zm4.754 0V5.5h9.746c.69 0 1.25.56 1.25 1.25v10.5c0 .69-.56 1.25-1.25 1.25H9.504Z"
-            fill="currentColor"
-          />
-        </svg>
-      </button>
-
-      {/* 遮罩（点击关闭） */}
-      {isOpen && <div className="ws-overlay" onClick={() => setIsOpen(false)} />}
-
-      {/* 左侧滑出面板 */}
-      <div
-        className={clsx("ws-panel", { "ws-panel--open": isOpen })}
-        data-testid="workspace-sidebar"
-      >
-        {/* 顶部：标题 + 新建分组 */}
-        <div className="ws-panel__header">
-          <div className="ws-panel__title-row">
-            <h2 className="ws-panel__title">我的画布</h2>
-            <button
-              className="ws-panel__icon-btn"
-              title="新建分组"
-              onClick={() => setShowCreateWorkspace(true)}
-            >
-              {PlusIcon}
-            </button>
-          </div>
-
-          {/* 分组选择 */}
-          <div className="ws-panel__group-select">
-            <button
-              className={clsx("ws-panel__group-option", {
-                "ws-panel__group-option--active": activeWorkspaceId === null,
-              })}
-              onClick={() => onWorkspaceFilterChange(null)}
-            >
-              全部
-            </button>
-            {workspaces.map((ws) => (
-              <button
-                key={ws.id}
-                className={clsx("ws-panel__group-option", {
-                  "ws-panel__group-option--active":
-                    activeWorkspaceId === ws.id,
-                })}
-                onClick={() => onWorkspaceFilterChange(ws.id)}
-              >
-                {ws.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 搜索框 */}
-        <div className="ws-panel__search">
-          {searchIcon}
-          <input
-            className="ws-panel__search-input"
-            placeholder="搜索画布…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <span className="ws-panel__search-hint">
-              {visibleCanvases.length} 个结果
-            </span>
-          )}
-        </div>
-
-        {/* 画布列表（唯一滚动区） */}
-        <div className="ws-panel__content">
-          {!activeWorkspaceId && grouped && grouped.length === 0 ? (
-            <div className="ws-panel__empty">
-              <p>还没有画布</p>
-              <span>在下方创建第一个画布</span>
-            </div>
-          ) : visibleCanvases.length === 0 ? (
-            <div className="ws-panel__empty">
-              <p>{searchQuery ? "没有匹配的画布" : "这个分组还是空的"}</p>
-              <span>
-                {searchQuery ? "换个关键词试试" : "在下方创建画布并选择此分组"}
-              </span>
-            </div>
-          ) : activeWorkspaceId ? (
-            <div className="ws-panel__group">
-              {visibleCanvases.map(renderCanvasRow)}
-            </div>
-          ) : (
-            grouped!.map(({ workspace, items }) => {
-              const collapsed = collapsedGroups.has(workspace.id);
-              if (items.length === 0 && !showCreateWorkspace) {
-                return null;
-              }
-              return (
-                <div key={workspace.id} className="ws-panel__group">
-                  <div className="ws-panel__group-header">
-                    <button
-                      className="ws-panel__group-toggle"
-                      onClick={() => toggleGroup(workspace.id)}
-                    >
-                      <span
-                        className={clsx("ws-panel__chevron", {
-                          "ws-panel__chevron--open": !collapsed,
-                        })}
-                      >
-                        {chevronDownIcon}
-                      </span>
-                      <span className="ws-panel__group-name">
-                        {workspace.name}
-                      </span>
-                      <span className="ws-panel__group-count">
-                        {items.length}
-                      </span>
-                    </button>
-                    {workspace.id !== "default" && (
-                      <div className="ws-panel__group-actions">
-                        <button
-                          className="ws-panel__group-action"
-                          title={`重命名分组「${workspace.name}」`}
-                          onClick={() => {
-                            setRenamingWorkspace(workspace);
-                            setRenameValue(workspace.name);
-                          }}
-                        >
-                          {pencilIcon}
-                        </button>
-                        <button
-                          className="ws-panel__group-action ws-panel__group-action--danger"
-                          title={`删除分组「${workspace.name}」`}
-                          onClick={() => handleDeleteWorkspace(workspace)}
-                        >
-                          {TrashIcon}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {!collapsed && items.map(renderCanvasRow)}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* 底部：新建画布（归属当前选中分组） */}
-        <div className="ws-panel__footer">
-          <FilledButton
-            label="新建画布"
-            onClick={() => {
-              onCreateCanvas();
-              setIsOpen(false);
-            }}
-            fullWidth
+    <div className="ws-sidebar">
+      {/* 顶部：标题 + 新建分组 */}
+      <div className="ws-sidebar__header">
+        <div className="ws-sidebar__title-row">
+          <h2 className="ws-sidebar__title">我的画布</h2>
+          <button
+            className="ws-sidebar__icon-btn"
+            title="新建分组"
+            onClick={() => setShowCreateWorkspace(true)}
           >
             {PlusIcon}
-            <span className="ws-panel__footer-label">新建画布</span>
-          </FilledButton>
+          </button>
         </div>
 
-        {/* 新建分组对话框 */}
-        {showCreateWorkspace && (
-          <div
-            className="ws-dialog-overlay"
-            onClick={() => setShowCreateWorkspace(false)}
+        {/* 分组选择 */}
+        <div className="ws-sidebar__group-select">
+          <button
+            className={clsx("ws-sidebar__group-option", {
+              "ws-sidebar__group-option--active": activeWorkspaceId === null,
+            })}
+            onClick={() => onWorkspaceFilterChange(null)}
           >
-            <div className="ws-dialog" onClick={(e) => e.stopPropagation()}>
-              <h3>新建分组</h3>
-              <div className="ws-dialog__content">
-                <div className="ws-dialog__form-group">
-                  <label>分组名称</label>
-                  <input
-                    autoFocus
-                    value={newWorkspaceName}
-                    placeholder="例如：项目A、灵感收集…"
-                    onChange={(e) => setNewWorkspaceName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleCreateWorkspace();
-                      }
-                    }}
-                  />
-                </div>
-                <div className="ws-dialog__form-group">
-                  <label>备注（可选）</label>
-                  <input
-                    value={newWorkspaceNote}
-                    placeholder="这个分组放什么…"
-                    onChange={(e) => setNewWorkspaceNote(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="ws-dialog__actions">
-                <button
-                  className="ws-dialog__cancel"
-                  onClick={() => setShowCreateWorkspace(false)}
-                >
-                  取消
-                </button>
-                <button
-                  className="ws-dialog__confirm"
-                  disabled={!newWorkspaceName.trim()}
-                  onClick={handleCreateWorkspace}
-                >
-                  创建
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+            全部
+          </button>
+          {workspaces.map((ws) => (
+            <button
+              key={ws.id}
+              className={clsx("ws-sidebar__group-option", {
+                "ws-sidebar__group-option--active":
+                  activeWorkspaceId === ws.id,
+              })}
+              onClick={() => onWorkspaceFilterChange(ws.id)}
+            >
+              {ws.name}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* 重命名分组对话框 */}
-        {renamingWorkspace && (
-          <div
-            className="ws-dialog-overlay"
-            onClick={() => setRenamingWorkspace(null)}
-          >
-            <div className="ws-dialog" onClick={(e) => e.stopPropagation()}>
-              <h3>重命名分组</h3>
-              <div className="ws-dialog__content">
-                <div className="ws-dialog__form-group">
-                  <label>分组名称</label>
-                  <input
-                    autoFocus
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleRenameWorkspaceSubmit();
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="ws-dialog__actions">
-                <button
-                  className="ws-dialog__cancel"
-                  onClick={() => setRenamingWorkspace(null)}
-                >
-                  取消
-                </button>
-                <button
-                  className="ws-dialog__confirm"
-                  disabled={!renameValue.trim()}
-                  onClick={handleRenameWorkspaceSubmit}
-                >
-                  保存
-                </button>
-              </div>
-            </div>
-          </div>
+      {/* 搜索框 */}
+      <div className="ws-sidebar__search">
+        {searchIcon}
+        <input
+          className="ws-sidebar__search-input"
+          placeholder="搜索画布…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <span className="ws-sidebar__search-hint">
+            {visibleCanvases.length} 个结果
+          </span>
         )}
       </div>
-    </>
+
+      {/* 画布列表（唯一滚动区） */}
+      <div className="ws-sidebar__content">
+        {!activeWorkspaceId && grouped && grouped.length === 0 ? (
+          <div className="ws-sidebar__empty">
+            <p>还没有画布</p>
+            <span>在下方创建第一个画布</span>
+          </div>
+        ) : visibleCanvases.length === 0 ? (
+          <div className="ws-sidebar__empty">
+            <p>{searchQuery ? "没有匹配的画布" : "这个分组还是空的"}</p>
+            <span>
+              {searchQuery ? "换个关键词试试" : "在下方创建画布并选择此分组"}
+            </span>
+          </div>
+        ) : activeWorkspaceId ? (
+          <div className="ws-sidebar__group">
+            {visibleCanvases.map(renderCanvasRow)}
+          </div>
+        ) : (
+          grouped!.map(({ workspace, items }) => {
+            const collapsed = collapsedGroups.has(workspace.id);
+            if (items.length === 0) {
+              return null;
+            }
+            return (
+              <div key={workspace.id} className="ws-sidebar__group">
+                <div className="ws-sidebar__group-header">
+                  <button
+                    className="ws-sidebar__group-toggle"
+                    onClick={() => toggleGroup(workspace.id)}
+                  >
+                    <span
+                      className={clsx("ws-sidebar__chevron", {
+                        "ws-sidebar__chevron--open": !collapsed,
+                      })}
+                    >
+                      {chevronDownIcon}
+                    </span>
+                    <span className="ws-sidebar__group-name">
+                      {workspace.name}
+                    </span>
+                    <span className="ws-sidebar__group-count">
+                      {items.length}
+                    </span>
+                  </button>
+                  {workspace.id !== "default" && (
+                    <div className="ws-sidebar__group-actions">
+                      <button
+                        className="ws-sidebar__group-action"
+                        title={`重命名分组「${workspace.name}」`}
+                        onClick={() => {
+                          setRenamingWorkspace(workspace);
+                          setRenameValue(workspace.name);
+                        }}
+                      >
+                        {pencilIcon}
+                      </button>
+                      <button
+                        className="ws-sidebar__group-action ws-sidebar__group-action--danger"
+                        title={`删除分组「${workspace.name}」`}
+                        onClick={() => handleDeleteWorkspace(workspace)}
+                      >
+                        {TrashIcon}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {!collapsed && items.map(renderCanvasRow)}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* 底部：新建画布（归属当前选中分组） */}
+      <div className="ws-sidebar__footer">
+        <FilledButton
+          label="新建画布"
+          onClick={onCreateCanvas}
+          fullWidth
+        >
+          {PlusIcon}
+          <span className="ws-sidebar__footer-label">新建画布</span>
+        </FilledButton>
+      </div>
+
+      {/* 新建分组对话框 */}
+      {showCreateWorkspace && (
+        <div
+          className="ws-dialog-overlay"
+          onClick={() => setShowCreateWorkspace(false)}
+        >
+          <div className="ws-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>新建分组</h3>
+            <div className="ws-dialog__content">
+              <div className="ws-dialog__form-group">
+                <label>分组名称</label>
+                <input
+                  autoFocus
+                  value={newWorkspaceName}
+                  placeholder="例如：项目A、灵感收集…"
+                  onChange={(e) => setNewWorkspaceName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleCreateWorkspace();
+                    }
+                  }}
+                />
+              </div>
+              <div className="ws-dialog__form-group">
+                <label>备注（可选）</label>
+                <input
+                  value={newWorkspaceNote}
+                  placeholder="这个分组放什么…"
+                  onChange={(e) => setNewWorkspaceNote(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="ws-dialog__actions">
+              <button
+                className="ws-dialog__cancel"
+                onClick={() => setShowCreateWorkspace(false)}
+              >
+                取消
+              </button>
+              <button
+                className="ws-dialog__confirm"
+                disabled={!newWorkspaceName.trim()}
+                onClick={handleCreateWorkspace}
+              >
+                创建
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 重命名分组对话框 */}
+      {renamingWorkspace && (
+        <div
+          className="ws-dialog-overlay"
+          onClick={() => setRenamingWorkspace(null)}
+        >
+          <div className="ws-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>重命名分组</h3>
+            <div className="ws-dialog__content">
+              <div className="ws-dialog__form-group">
+                <label>分组名称</label>
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleRenameWorkspaceSubmit();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="ws-dialog__actions">
+              <button
+                className="ws-dialog__cancel"
+                onClick={() => setRenamingWorkspace(null)}
+              >
+                取消
+              </button>
+              <button
+                className="ws-dialog__confirm"
+                disabled={!renameValue.trim()}
+                onClick={handleRenameWorkspaceSubmit}
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

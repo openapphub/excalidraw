@@ -1,82 +1,25 @@
 /* =============================================================================
- * WorkspaceSidebar - 左侧滑出式画布目录（复刻 AstraDraw WorkspaceSidebar）
- * 结构：触发器 → 遮罩 → 左侧面板（header/分组选择/搜索/列表/底部新建）
- * 面板：position fixed left 0，margin-left 负值滑出动画，自带遮罩层。
+ * WorkspaceSidebar - 画布目录内容（放在官方 Sidebar 抽屉内）
+ * 官方 Sidebar 体系管理位置/大小/打开动画（absolute right 0 + 官方宽度变量），
+ * 这里只负责内容布局。滚动链（Pitfall 22）：tabpanel(min-height:0) >
+ * 本组件(height:100%+min-height:0) > content(flex:1+min-height:0+overflow-y:auto)
  * =========================================================================== */
 
-/* ---------- 触发器按钮（左上角，官方 hamburger 之前） ---------- */
-.ws-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  margin: 0;
-  padding: 0;
-  background: var(--button-bg-color, #fff);
-  border: 1px solid var(--button-border-color, #e5e5e5);
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--icon-fill-color, #6b6b6b);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
-  flex-shrink: 0;
-
-  &:hover {
-    background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
-    color: var(--text-primary-color, #1b1b1f);
-  }
-
-  &--active {
-    color: var(--color-primary, #6965db);
-    border-color: var(--color-primary, #6965db);
-    background: var(--color-primary-light, rgba(105, 101, 219, 0.1));
-  }
-
-  svg {
-    display: block;
-  }
-}
-
-/* ---------- 遮罩 ---------- */
-.ws-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 90;
-}
-
-/* ---------- 左侧面板 ---------- */
-.ws-panel {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 300px;
-  max-width: 85vw;
-  background: var(--island-bg-color, #fff);
-  border-right: 1px solid var(--default-border-color, #e5e5e5);
+.ws-sidebar {
   display: flex;
   flex-direction: column;
-  z-index: 100;
-  transform: translateX(-100%);
-  transition: transform 0.22s ease-out;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
-
-  &--open {
-    transform: translateX(0);
-  }
+  height: 100%;
+  min-height: 0; /* flex child: allow shrink so inner scroll works */
+  padding: 0.75rem;
+  gap: 0.75rem;
+  font: var(--ui-font);
 
   /* ---------- Header ---------- */
   &__header {
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.625rem;
-    padding: 1rem 1rem 0.5rem;
+    gap: 0.5rem;
   }
 
   &__title-row {
@@ -151,7 +94,6 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin: 0 1rem;
     padding: 0.5rem 0.75rem;
     background: var(--default-bg-color, #f5f5f5);
     border: 1px solid transparent;
@@ -203,7 +145,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.625rem;
-    padding: 0.625rem 1rem;
   }
 
   /* ---------- 分组 ---------- */
@@ -321,7 +262,7 @@
   /* ---------- 底部：新建画布 ---------- */
   &__footer {
     flex-shrink: 0;
-    padding: 0.75rem 1rem;
+    padding-top: 0.25rem;
     border-top: 1px solid var(--default-border-color, #e5e5e5);
   }
 

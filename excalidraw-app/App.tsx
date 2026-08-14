@@ -1257,6 +1257,12 @@ const ExcalidrawWrapper = () => {
 
           return (
             <div style={{ display: "flex", alignItems: "center" }}>
+              <Sidebar.Trigger
+                name={CREATIONS_SIDEBAR_NAME}
+                tab="creations"
+                icon={LoadIcon}
+                title={t("toolBar.myCreations")}
+              />
               {statusMessage && (
                 <div
                   style={{
@@ -1300,22 +1306,31 @@ const ExcalidrawWrapper = () => {
         }}
       >
         <DefaultSidebar __fallback />
-        <WorkspaceSidebar
-          canvases={canvases}
-          workspaces={workspaces}
-          currentCanvasId={currentCanvasId}
-          activeWorkspaceId={activeWorkspaceId}
-          onWorkspaceFilterChange={(id) => setActiveWorkspaceId(id)}
-          onCanvasSelect={handleCanvasSelect}
-          onCanvasDelete={handleCanvasDelete}
-          onCreateWorkspace={(name, note) => createWorkspace(name, note)}
-          onRenameWorkspace={(id, name) => updateWorkspace(id, { name })}
-          onDeleteWorkspace={(id) => deleteWorkspace(id)}
-          onMoveCanvas={(canvasId, workspaceId) =>
-            moveCanvasToWorkspace(canvasId, workspaceId)
-          }
-          onCreateCanvas={() => setCreateCanvasDialog({ isOpen: true })}
-        />
+        <Sidebar name={CREATIONS_SIDEBAR_NAME} __fallback>
+          <Sidebar.Tabs>
+            <Sidebar.Header />
+            <Sidebar.Tab tab="creations">
+              <WorkspaceSidebar
+                canvases={canvases}
+                workspaces={workspaces}
+                currentCanvasId={currentCanvasId}
+                activeWorkspaceId={activeWorkspaceId}
+                onWorkspaceFilterChange={(id) => setActiveWorkspaceId(id)}
+                onCanvasSelect={handleCanvasSelect}
+                onCanvasDelete={handleCanvasDelete}
+                onCreateWorkspace={(name, note) =>
+                  createWorkspace(name, note)
+                }
+                onRenameWorkspace={(id, name) => updateWorkspace(id, { name })}
+                onDeleteWorkspace={(id) => deleteWorkspace(id)}
+                onMoveCanvas={(canvasId, workspaceId) =>
+                  moveCanvasToWorkspace(canvasId, workspaceId)
+                }
+                onCreateCanvas={() => setCreateCanvasDialog({ isOpen: true })}
+              />
+            </Sidebar.Tab>
+          </Sidebar.Tabs>
+        </Sidebar>
         <AppMainMenu
           onCollabDialogOpen={onCollabDialogOpen}
           isCollaborating={isCollaborating}
