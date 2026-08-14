@@ -99,6 +99,7 @@ import {
   createCanvasDialogAtom,
   renameCanvasDialogAtom,
   saveAsDialogAtom,
+  workspacesAtom,
 } from "./app-jotai";
 import {
   FIREBASE_STORAGE_PREFIXES,
@@ -122,6 +123,7 @@ import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
 import { useAuth } from "./hooks/useAuth";
 import { useCanvasManagement } from "./hooks/useCanvasManagement";
+import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useAiCanvasSync } from "./hooks/useAiCanvasSync";
 import { useMagicSettings } from "./hooks/useMagicSettings";
 import {
@@ -174,7 +176,7 @@ import { CloudflareKVAdapter } from "./data/storageAdapters/CloudflareKVAdapter"
 
 import { S3StorageAdapter } from "./data/storageAdapters/S3StorageAdapter";
 
-import { MyCreationsTab } from "./components/MyCreationsTab";
+import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
 
 import { CREATIONS_SIDEBAR_NAME } from "./app_constants";
 
@@ -387,8 +389,10 @@ const ExcalidrawWrapper = () => {
   const user = useAtomValue(userAtom);
   const storageConfig = useAtomValue(storageConfigAtom);
   const currentCanvasId = useAtomValue(currentCanvasIdAtom);
+  const workspaces = useAtomValue(workspacesAtom);
   const [createCanvasDialogState] = useAtom(createCanvasDialogAtom);
-  const [renameCanvasDialogState] = useAtom(renameCanvasDialogAtom);
+  const [renameCanvasDialogState, setRenameCanvasDialog] =
+    useAtom(renameCanvasDialogAtom);
   const [saveAsDialogState] = useAtom(saveAsDialogAtom);
 
   const [saveStatus, setSaveStatus] = useState<
@@ -460,6 +464,17 @@ const ExcalidrawWrapper = () => {
     collabAPI,
     setErrorMessage,
     resetSaveStatus,
+  });
+
+  const {
+    isLoading: isWorkspacesLoading,
+    createWorkspace,
+    updateWorkspace,
+    deleteWorkspace,
+    moveCanvasToWorkspace,
+  } = useWorkspaces({
+    storageAdapter,
+    setErrorMessage,
   });
 
   const saveCanvas = useCallback(async () => {
@@ -1291,11 +1306,26 @@ const ExcalidrawWrapper = () => {
           <Sidebar.Tabs>
             <Sidebar.Header />
             <Sidebar.Tab tab="creations">
-              <MyCreationsTab
+              <WorkspaceSidebar
                 canvases={canvases}
+                workspaces={workspaces}
+                currentCanvasId={currentCanvasId}
                 onCanvasSelect={handleCanvasSelect}
                 onCanvasDelete={handleCanvasDelete}
-                currentCanvasId={currentCanvasId}
+                onCanvasRename={(canvasId: string, currentName: string) =>
+                  setRenameCanvasDialog({
+                    isOpen: true,
+                    canvasId,
+                    currentName,
+                  })
+                }
+                onCreateWorkspace={(name, note) =>
+                  createWorkspace(name, note)
+                }
+                onDeleteWorkspace={(id) => deleteWorkspace(id)}
+                onMoveCanvas={(canvasId, workspaceId) =>
+                  moveCanvasToWorkspace(canvasId, workspaceId)
+                }
               />
             </Sidebar.Tab>
           </Sidebar.Tabs>
