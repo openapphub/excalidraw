@@ -160,12 +160,17 @@ export const useCanvasManagement = ({
   );
 
   const handleCanvasCreate = useCallback(
-    async (newName: string) => {
+    async (newName: string, workspaceId?: string) => {
       if (!excalidrawAPI) {
         return;
       }
       try {
-        const appState = { ...excalidrawAPI.getAppState(), name: newName };
+        const appState = {
+          ...excalidrawAPI.getAppState(),
+          name: newName,
+          // 新画布归属指定分组（缺省 default 由后端兜底）。
+          ...(workspaceId ? { workspaceId } : {}),
+        };
         const newCanvasData = {
           elements: [],
           appState,

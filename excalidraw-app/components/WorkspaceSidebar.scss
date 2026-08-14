@@ -1,25 +1,82 @@
 /* =============================================================================
- * WorkspaceSidebar - Workspaces 画布目录（复刻 AstraDraw 视觉语言）
- * 结构：header / 分组选择 / 搜索 / 分组画布列表 / 底部新建按钮
- * 滚动链（Pitfall 22）：tabpanel(min-height:0) > 本组件(height:100%+min-height:0)
- *   > content(flex:1+min-height:0+overflow-y:auto) —— 每层都收缩才可滚动
+ * WorkspaceSidebar - 左侧滑出式画布目录（复刻 AstraDraw WorkspaceSidebar）
+ * 结构：触发器 → 遮罩 → 左侧面板（header/分组选择/搜索/列表/底部新建）
+ * 面板：position fixed left 0，margin-left 负值滑出动画，自带遮罩层。
  * =========================================================================== */
 
-.ws-sidebar {
+/* ---------- 触发器按钮（左上角，官方 hamburger 之前） ---------- */
+.ws-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0;
+  background: var(--button-bg-color, #fff);
+  border: 1px solid var(--button-border-color, #e5e5e5);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--icon-fill-color, #6b6b6b);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+
+  &:hover {
+    background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
+    color: var(--text-primary-color, #1b1b1f);
+  }
+
+  &--active {
+    color: var(--color-primary, #6965db);
+    border-color: var(--color-primary, #6965db);
+    background: var(--color-primary-light, rgba(105, 101, 219, 0.1));
+  }
+
+  svg {
+    display: block;
+  }
+}
+
+/* ---------- 遮罩 ---------- */
+.ws-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 90;
+}
+
+/* ---------- 左侧面板 ---------- */
+.ws-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 300px;
+  max-width: 85vw;
+  background: var(--island-bg-color, #fff);
+  border-right: 1px solid var(--default-border-color, #e5e5e5);
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0; /* flex child: allow shrink so inner scroll works */
-  padding: 0.75rem;
-  gap: 0.75rem;
-  font: var(--ui-font);
+  z-index: 100;
+  transform: translateX(-100%);
+  transition: transform 0.22s ease-out;
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
+
+  &--open {
+    transform: translateX(0);
+  }
 
   /* ---------- Header ---------- */
   &__header {
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.625rem;
+    padding: 1rem 1rem 0.5rem;
   }
 
   &__title-row {
@@ -35,7 +92,7 @@
     color: var(--text-primary-color, #1b1b1f);
   }
 
-  &__add-group {
+  &__icon-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -59,7 +116,7 @@
     }
   }
 
-  /* ---------- 分组选择（全部/各分组 chips） ---------- */
+  /* ---------- 分组选择 chips ---------- */
   &__group-select {
     display: flex;
     flex-wrap: wrap;
@@ -88,12 +145,13 @@
     }
   }
 
-  /* ---------- 搜索框（复刻 AstraDraw .search） ---------- */
+  /* ---------- 搜索框 ---------- */
   &__search {
     flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    margin: 0 1rem;
     padding: 0.5rem 0.75rem;
     background: var(--default-bg-color, #f5f5f5);
     border: 1px solid transparent;
@@ -144,7 +202,8 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.625rem;
+    padding: 0.625rem 1rem;
   }
 
   /* ---------- 分组 ---------- */
@@ -219,7 +278,19 @@
     padding: 1px 8px;
   }
 
-  &__group-delete {
+  &__group-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.125rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  &__group-header:hover &__group-actions {
+    opacity: 1;
+  }
+
+  &__group-action {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -229,8 +300,7 @@
     border-radius: 4px;
     cursor: pointer;
     color: var(--icon-fill-color, #6b6b6b);
-    opacity: 0;
-    transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+    transition: color 0.15s, background-color 0.15s;
 
     svg {
       width: 14px;
@@ -238,19 +308,20 @@
     }
 
     &:hover {
+      color: var(--color-primary, #6965db);
+      background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
+    }
+
+    &--danger:hover {
       color: var(--color-danger, #e03131);
       background: rgba(224, 49, 49, 0.08);
     }
   }
 
-  &__group-header:hover &__group-delete {
-    opacity: 1;
-  }
-
   /* ---------- 底部：新建画布 ---------- */
   &__footer {
     flex-shrink: 0;
-    padding-top: 0.25rem;
+    padding: 0.75rem 1rem;
     border-top: 1px solid var(--default-border-color, #e5e5e5);
   }
 
@@ -409,7 +480,7 @@
     border: 1px solid var(--default-border-color, #e5e5e5);
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
+    z-index: 110;
     overflow: hidden;
     padding: 4px 0;
 
@@ -418,6 +489,7 @@
       top: -4px;
       left: calc(100% - 4px);
       min-width: 140px;
+      z-index: 120;
     }
   }
 
@@ -459,30 +531,8 @@
     }
   }
 
-  &__menu-item-inner {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 0.8125rem;
-    color: var(--text-primary-color, #1b1b1f);
-    text-align: left;
-    transition: background-color 0.15s;
-
-    &:hover {
-      background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
-    }
-
-    svg {
-      width: 15px;
-      height: 15px;
-      color: var(--icon-fill-color, #6b6b6b);
-      flex-shrink: 0;
-    }
+  &__menu-item--relative {
+    position: relative;
   }
 
   &__menu-empty {
@@ -499,7 +549,7 @@
 }
 
 /* =============================================================================
- * 新建分组对话框（复刻 AstraDraw CreateCollectionDialog）
+ * 对话框（复刻 AstraDraw CreateCollectionDialog）
  * =========================================================================== */
 .ws-dialog-overlay {
   position: fixed;

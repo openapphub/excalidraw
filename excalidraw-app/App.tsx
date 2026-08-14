@@ -96,6 +96,7 @@ import {
   appJotaiStore,
   storageConfigAtom,
   currentCanvasIdAtom,
+  activeWorkspaceIdAtom,
   createCanvasDialogAtom,
   renameCanvasDialogAtom,
   saveAsDialogAtom,
@@ -390,7 +391,10 @@ const ExcalidrawWrapper = () => {
   const storageConfig = useAtomValue(storageConfigAtom);
   const currentCanvasId = useAtomValue(currentCanvasIdAtom);
   const workspaces = useAtomValue(workspacesAtom);
-  const [createCanvasDialogState] = useAtom(createCanvasDialogAtom);
+  const [activeWorkspaceId, setActiveWorkspaceId] =
+    useAtom(activeWorkspaceIdAtom);
+  const [createCanvasDialogState, setCreateCanvasDialog] =
+    useAtom(createCanvasDialogAtom);
   const [renameCanvasDialogState, setRenameCanvasDialog] =
     useAtom(renameCanvasDialogAtom);
   const [saveAsDialogState] = useAtom(saveAsDialogAtom);
@@ -1253,12 +1257,6 @@ const ExcalidrawWrapper = () => {
 
           return (
             <div style={{ display: "flex", alignItems: "center" }}>
-              <Sidebar.Trigger
-                name={CREATIONS_SIDEBAR_NAME}
-                tab="creations"
-                icon={LoadIcon}
-                title={t("toolBar.myCreations")}
-              />
               {statusMessage && (
                 <div
                   style={{
@@ -1302,34 +1300,22 @@ const ExcalidrawWrapper = () => {
         }}
       >
         <DefaultSidebar __fallback />
-        <Sidebar name={CREATIONS_SIDEBAR_NAME} __fallback>
-          <Sidebar.Tabs>
-            <Sidebar.Header />
-            <Sidebar.Tab tab="creations">
-              <WorkspaceSidebar
-                canvases={canvases}
-                workspaces={workspaces}
-                currentCanvasId={currentCanvasId}
-                onCanvasSelect={handleCanvasSelect}
-                onCanvasDelete={handleCanvasDelete}
-                onCanvasRename={(canvasId: string, currentName: string) =>
-                  setRenameCanvasDialog({
-                    isOpen: true,
-                    canvasId,
-                    currentName,
-                  })
-                }
-                onCreateWorkspace={(name, note) =>
-                  createWorkspace(name, note)
-                }
-                onDeleteWorkspace={(id) => deleteWorkspace(id)}
-                onMoveCanvas={(canvasId, workspaceId) =>
-                  moveCanvasToWorkspace(canvasId, workspaceId)
-                }
-              />
-            </Sidebar.Tab>
-          </Sidebar.Tabs>
-        </Sidebar>
+        <WorkspaceSidebar
+          canvases={canvases}
+          workspaces={workspaces}
+          currentCanvasId={currentCanvasId}
+          activeWorkspaceId={activeWorkspaceId}
+          onWorkspaceFilterChange={(id) => setActiveWorkspaceId(id)}
+          onCanvasSelect={handleCanvasSelect}
+          onCanvasDelete={handleCanvasDelete}
+          onCreateWorkspace={(name, note) => createWorkspace(name, note)}
+          onRenameWorkspace={(id, name) => updateWorkspace(id, { name })}
+          onDeleteWorkspace={(id) => deleteWorkspace(id)}
+          onMoveCanvas={(canvasId, workspaceId) =>
+            moveCanvasToWorkspace(canvasId, workspaceId)
+          }
+          onCreateCanvas={() => setCreateCanvasDialog({ isOpen: true })}
+        />
         <AppMainMenu
           onCollabDialogOpen={onCollabDialogOpen}
           isCollaborating={isCollaborating}

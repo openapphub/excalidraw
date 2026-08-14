@@ -171,7 +171,7 @@ export const saveAsDialogAtom = atom({ isOpen: false });
 export const workspacesAtom = atom<WorkspaceMetadata[]>([]);
 
 /** 当前激活的工作区 id："default" 为默认工作区，"all" 表示显示全部。 */
-export const activeWorkspaceIdAtom = atom<string>("default");
+export const activeWorkspaceIdAtom = atom<string | null>("default");
 
 /** 工作区侧边栏是否展开。 */
 export const workspaceSidebarOpenAtom = atom<boolean>(false);
