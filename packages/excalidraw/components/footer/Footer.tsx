@@ -26,7 +26,11 @@ const Footer = ({
   defaultUIEnabled: boolean;
   zoomUIEnabled: boolean;
 }) => {
-  const { FooterCenterTunnel, WelcomeScreenHelpHintTunnel } = useTunnels();
+  const {
+    FooterCenterTunnel,
+    FooterLeftExtraTunnel,
+    WelcomeScreenHelpHintTunnel,
+  } = useTunnels();
   const app = useApp();
 
   return (
@@ -61,6 +65,8 @@ const Footer = ({
               )}
             </Section>
           </Stack.Col>
+          {/* 自建扩展：app 侧通过 FooterLeftExtraTunnel.In 注入底部左侧按钮（如"画布列表"） */}
+          <FooterLeftExtraTunnel.Out />
         </div>
       )}
       <FooterCenterTunnel.Out />

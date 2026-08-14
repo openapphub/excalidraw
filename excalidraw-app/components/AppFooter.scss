@@ -1,0 +1,48 @@
+// =============================================================================
+// AppFooter - 底部左侧额外按钮（"画布列表"等）
+// 复刻 AstraDraw AppFooter.module.scss 的 _sidebarButton/_toolIconWrapper 数值，
+// 转成普通 scss（非 CSS Modules），走官方 CSS 变量。
+// =============================================================================
+
+// 底部左侧额外按钮容器：与官方 footer-left 的 Stack 并排（flex 行布局）
+.footer-left-extra {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+// 侧边栏切换按钮（画布列表）：44px 图标按钮，边框 + 悬停背景
+.sidebarButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--button-border-color, var(--default-border-color));
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--icon-fill-color);
+  background-color: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background-color: var(--button-hover-bg);
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--focus-highlight-color, var(--color-primary));
+  }
+}
+
+// 图标承载层：居中，svg 固定 20px
+.toolIconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}

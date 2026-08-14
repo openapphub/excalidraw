@@ -463,6 +463,7 @@ export { Sidebar } from "./components/Sidebar/Sidebar";
 export { Button } from "./components/Button";
 export { Footer };
 export { MainMenu };
+export { useTunnels } from "./context/tunnels";
 export { Ellipsify } from "./components/Ellipsify";
 export {
   useEditorInterface,
