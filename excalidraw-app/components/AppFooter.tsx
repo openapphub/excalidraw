@@ -55,7 +55,7 @@ const AppFooterLeft = React.memo(
       <FooterLeftExtraTunnel.In>
         <div className="footer-left-extra zen-mode-transition">
           <div className="excalidraw-tooltip-wrapper">
-            <Tooltip label="画布列表">
+            <Tooltip label="画布列表" compact>
               <button
                 className="sidebarButton"
                 onClick={handleToggleCreationsSidebar}
