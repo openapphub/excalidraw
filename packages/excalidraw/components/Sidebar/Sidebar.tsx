@@ -117,6 +117,11 @@ export const SidebarInner = forwardRef(
           if ((event.target as Element).closest(".sidebar-trigger")) {
             return;
           }
+          // 点在任意 sidebar 实例内都不当成外部点击。host + fallback 若短暂
+          // 同时存在，点可见侧栏会被另一份 Island 的 outside-click 关掉。
+          if ((event.target as Element).closest(`.${CLASSES.SIDEBAR}`)) {
+            return;
+          }
           if (!docked || !editorInterface.canFitSidebar) {
             closeLibrary();
           }

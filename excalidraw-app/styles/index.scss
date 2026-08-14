@@ -1,0 +1,11 @@
+// =============================================================================
+// AstraDraw Shared Styles - Index
+// =============================================================================
+// This file re-exports all shared styles for convenience.
+// For CSS Modules, prefer importing individual files:
+//   @use "../../styles/mixins" as *;
+//   @use "../../styles/variables" as *;
+
+@forward "variables";
+@forward "mixins";
+@forward "animations";

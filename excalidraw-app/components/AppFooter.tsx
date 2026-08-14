@@ -6,6 +6,10 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { isExcalidrawPlusSignedUser } from "../app_constants";
 import { CREATIONS_SIDEBAR_NAME } from "../app_constants";
+import { useAuth } from "../auth";
+import { useAtomValue } from "../app-jotai";
+import { currentCanvasIdAtom } from "../app-jotai";
+import { currentSceneIdAtom } from "./Settings/settingsState";
 
 import { DebugFooter, isVisualDebuggerEnabled } from "./DebugCanvas";
 import { EncryptedIcon } from "./EncryptedIcon";
@@ -56,6 +60,17 @@ export interface AppFooterProps {
 const AppFooterLeft = React.memo(
   ({ excalidrawAPI }: { excalidrawAPI: ExcalidrawImperativeAPI | null }) => {
     const { FooterLeftExtraTunnel } = useTunnels();
+    const { isAuthenticated } = useAuth();
+    const sceneId = useAtomValue(currentSceneIdAtom);
+    const currentCanvasId = useAtomValue(currentCanvasIdAtom);
+    const showComments =
+      isAuthenticated && !!sceneId && sceneId === currentCanvasId;
+
+    // 评论走官方 DefaultSidebar 的 comments tab（由 CommentsMount 提供）；
+    // 演示/录制仍指向 creations 侧栏，等各自功能落地。
+    const handleToggleComments = () => {
+      excalidrawAPI?.toggleSidebar({ name: "default", tab: "comments" });
+    };
 
     const handleToggleSidebar = (tab: string) => {
       if (!excalidrawAPI) {
@@ -106,19 +121,22 @@ const AppFooterLeft = React.memo(
               </div>
             </button>
           </Tooltip>
-          <Tooltip label="评论">
-            <button
-              className="sidebarButton"
-              onClick={() => handleToggleSidebar("comments")}
-              onPointerDown={(e) => e.stopPropagation()}
-              type="button"
-              aria-label="评论"
-            >
-              <div className="toolIconWrapper" aria-hidden="true">
-                {commentsIcon}
-              </div>
-            </button>
-          </Tooltip>
+          {/* 评论依赖后端 JWT，IndexedDB 本地模式不可用，未登录不展示以免误解。 */}
+          {showComments && (
+            <Tooltip label="评论">
+              <button
+                className="sidebarButton"
+                onClick={handleToggleComments}
+                onPointerDown={(e) => e.stopPropagation()}
+                type="button"
+                aria-label="评论"
+              >
+                <div className="toolIconWrapper" aria-hidden="true">
+                  {commentsIcon}
+                </div>
+              </button>
+            </Tooltip>
+          )}
         </div>
       </FooterLeftExtraTunnel.In>
     );

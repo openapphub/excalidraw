@@ -45,6 +45,8 @@ class Portal {
   collab: TCollabClass;
   socket: Socket | null = null;
   socketInitialized: boolean = false; // we don't want the socket to emit any updates until it is fully initialized
+  /** 工作区自动协作：画面已在本地，进房即可广播，不必等 Firebase / SCENE_INIT。 */
+  broadcastBeforeInit: boolean = false;
   roomId: string | null = null;
   roomKey: string | null = null;
   clientId: string = getCollabClientId();
@@ -90,15 +92,16 @@ class Portal {
     this.roomId = null;
     this.roomKey = null;
     this.socketInitialized = false;
+    this.broadcastBeforeInit = false;
     this.broadcastedElementVersions = new Map();
   }
 
   isOpen() {
     return !!(
-      this.socketInitialized &&
       this.socket &&
       this.roomId &&
-      this.roomKey
+      this.roomKey &&
+      (this.socketInitialized || this.broadcastBeforeInit)
     );
   }
 

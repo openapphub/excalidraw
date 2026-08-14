@@ -1,0 +1,316 @@
+// =============================================================================
+// CommentsSidebarHeader - CSS Module
+// =============================================================================
+@use "../../../styles/mixins" as *;
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border-outline-variant, #e0e0e0);
+}
+
+// =============================================================================
+// Search Input (using TextField component, matching Search tab pattern)
+// =============================================================================
+
+.searchWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  // Override TextField styles to match Search tab
+  :global(.ExcTextField) {
+    flex: 1 0 auto;
+  }
+
+  :global(.ExcTextField__input) {
+    background-color: #f5f5f9;
+    border-radius: var(--border-radius-md);
+    border: 0;
+
+    input::placeholder {
+      font-size: 0.9rem;
+    }
+  }
+}
+
+.clearButton {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--icon-fill-color, #6b6b6b);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  z-index: 1;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: var(--color-surface-high, #e8e8e8);
+    color: var(--color-on-surface, #1b1b1f);
+  }
+}
+
+// =============================================================================
+// Filter Button & Dropdown
+// =============================================================================
+
+.filterContainer {
+  position: relative;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.filterButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--icon-fill-color, #6b6b6b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    transform: rotate(90deg);
+  }
+
+  &:hover {
+    background: var(--color-surface-high, #e8e8e8);
+    color: var(--color-on-surface, #1b1b1f);
+  }
+}
+
+.filterButtonActive {
+  color: var(--color-primary, #6965db);
+
+  &:hover {
+    background: var(--color-surface-high, #e8e8e8);
+  }
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: 180px;
+  padding: 8px 0;
+  border: 1px solid var(--color-border-outline-variant, #e0e0e0);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+}
+
+.dropdownSection {
+  padding: 4px 0;
+}
+
+.dropdownLabel {
+  padding: 4px 12px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-on-surface-variant, #6b6b6b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sortItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--color-on-surface, #1b1b1f);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  svg {
+    flex-shrink: 0;
+    color: var(--icon-fill-color, #6b6b6b);
+  }
+
+  span {
+    flex: 1;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--color-surface-high, #f0f0f0);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.sortItemActive {
+  font-weight: 500;
+
+  svg {
+    color: var(--color-primary, #6965db);
+  }
+}
+
+.dropdownDivider {
+  height: 1px;
+  margin: 8px 0;
+  background: var(--color-border-outline-variant, #e0e0e0);
+}
+
+.toggleItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--color-on-surface, #1b1b1f);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: var(--color-surface-high, #f0f0f0);
+  }
+}
+
+.toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: var(--color-surface-high, #ccc);
+  border-radius: 11px;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggleActive {
+  background: var(--color-primary, #6965db);
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+
+  .toggleActive & {
+    transform: translateX(18px);
+  }
+}
+
+// =============================================================================
+// Dark Mode
+// =============================================================================
+
+@include dark-mode {
+  .header {
+    border-bottom-color: var(--color-border-outline-variant, #3a3a3a);
+  }
+
+  .searchWrapper {
+    :global(.ExcTextField__input) {
+      background-color: #31303b;
+    }
+  }
+
+  .clearButton {
+    color: var(--icon-fill-color, #b0b0b0);
+
+    &:hover {
+      background: var(--color-surface-high, #333);
+      color: var(--color-on-surface, #e0e0e0);
+    }
+  }
+
+  .filterButton {
+    background: transparent;
+    color: var(--icon-fill-color, #b0b0b0);
+
+    &:hover {
+      background: var(--color-surface-high, #333);
+      color: var(--color-on-surface, #e0e0e0);
+    }
+  }
+
+  .filterButtonActive {
+    color: var(--color-primary, #8b87ff);
+
+    &:hover {
+      background: var(--color-surface-high, #333);
+    }
+  }
+
+  .dropdown {
+    background: #2a2a2a;
+    border-color: var(--color-border-outline-variant, #3a3a3a);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .sortItem {
+    color: var(--color-on-surface, #e0e0e0);
+
+    svg {
+      color: var(--icon-fill-color, #b0b0b0);
+    }
+
+    &:hover:not(:disabled) {
+      background: var(--color-surface-mid, #333);
+    }
+  }
+
+  .sortItemActive {
+    svg {
+      color: var(--color-primary, #8b87ff);
+    }
+  }
+
+  .toggleItem {
+    color: var(--color-on-surface, #e0e0e0);
+
+    &:hover {
+      background: var(--color-surface-mid, #333);
+    }
+  }
+
+  .toggle {
+    background: var(--color-surface-high, #555);
+  }
+
+  .toggleActive {
+    background: var(--color-primary, #8b87ff);
+  }
+}

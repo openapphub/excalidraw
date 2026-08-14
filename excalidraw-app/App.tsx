@@ -4,6 +4,7 @@ import {
   TTDDialogTrigger,
   CaptureUpdateAction,
   reconcileElements,
+  getSceneVersion,
 } from "@excalidraw/excalidraw";
 import { trackEvent } from "@excalidraw/excalidraw/analytics";
 import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
@@ -33,6 +34,7 @@ import {
 } from "@excalidraw/common";
 import polyfill from "@excalidraw/excalidraw/polyfill";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { Toaster } from "react-hot-toast";
 import { loadFromBlob } from "@excalidraw/excalidraw/data/blob";
 import { useCallbackRefState } from "@excalidraw/excalidraw/hooks/useCallbackRefState";
 import { t } from "@excalidraw/excalidraw/i18n";
@@ -61,8 +63,6 @@ import {
 } from "@excalidraw/excalidraw/data/library";
 
 import { actionSaveToActiveFile } from "@excalidraw/excalidraw/actions";
-
-import { Sidebar, DefaultSidebar } from "@excalidraw/excalidraw/index";
 
 import { LoadIcon } from "@excalidraw/excalidraw/components/icons";
 
@@ -96,11 +96,9 @@ import {
   appJotaiStore,
   storageConfigAtom,
   currentCanvasIdAtom,
-  activeWorkspaceIdAtom,
   createCanvasDialogAtom,
   renameCanvasDialogAtom,
   saveAsDialogAtom,
-  workspacesAtom,
 } from "./app-jotai";
 import {
   FIREBASE_STORAGE_PREFIXES,
@@ -124,9 +122,10 @@ import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
 import { useAuth } from "./hooks/useAuth";
 import { useCanvasManagement } from "./hooks/useCanvasManagement";
-import { useWorkspaces } from "./hooks/useWorkspaces";
+import { useSceneEditLock } from "./hooks/useSceneEditLock";
 import { useAiCanvasSync } from "./hooks/useAiCanvasSync";
 import { useMagicSettings } from "./hooks/useMagicSettings";
+import { useShellRouteSync } from "./hooks/useShellRouteSync";
 import {
   exportToBackend,
   getCollaborationLinkData,
@@ -172,19 +171,63 @@ import { BackendStorageAdapter } from "./data/storageAdapters/BackendStorageAdap
 import { AuthError } from "./data/storageAdapters/BackendStorageAdapter";
 
 import { IndexedDBStorageAdapter } from "./data/storageAdapters/IndexedDBStorageAdapter";
+import {
+  isBackendPersistableCanvasId,
+  isIndexedDbCanvasId,
+} from "./data/canvasId";
 
 import { CloudflareKVAdapter } from "./data/storageAdapters/CloudflareKVAdapter";
 
 import { S3StorageAdapter } from "./data/storageAdapters/S3StorageAdapter";
 
-import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
-import { WorkspaceSidebarTrigger } from "./components/WorkspaceSidebarTrigger";
+import {
+  WorkspaceSidebar,
+  WorkspaceSidebarTrigger,
+  WorkspaceMainContent,
+  QuickSearchModal,
+  InviteAcceptPage,
+} from "./components/Workspace";
+import {
+  appModeAtom,
+  workspaceSidebarOpenAtom,
+  openWorkspaceSidebarAtom,
+  navigateToDashboardAtom,
+  activeCollectionIdAtom,
+  currentWorkspaceSlugAtom,
+  currentSceneIdAtom,
+  currentSceneTitleAtom,
+  currentSceneCanEditAtom,
+  currentWorkspaceAtom,
+  isAutoCollabSceneAtom,
+  sceneCollabEnabledAtom,
+  sceneEditLockAtom,
+  type WorkspaceData,
+} from "./components/Settings/settingsState";
+import { CommentsMount } from "./components/Comments";
+import { SceneEditLockBanner } from "./components/SceneEditLockBanner/SceneEditLockBanner";
+import { AuthProvider, useAuth as useAuthSession } from "./auth";
+import {
+  createScene,
+  startCollaboration as startSceneCollabRoom,
+  updateWorkspace as updateWorkspaceApi,
+  uploadWorkspaceAvatar,
+  deleteWorkspace as deleteWorkspaceApi,
+  listWorkspaces,
+  type Workspace,
+} from "./auth/workspaceApi";
+import { queryClient, queryKeys } from "./lib/queryClient";
+import { buildSceneUrl } from "./router";
+import {
+  drawingDefaultsToAppState,
+  loadDrawingDefaults,
+  type DrawingDefaults,
+} from "./drawingDefaults";
 
 import { CREATIONS_SIDEBAR_NAME } from "./app_constants";
 
 import type { CollabAPI } from "./collab/Collab";
 
-import type { IStorageAdapter } from "./data/storage";
+import type { CanvasData, IStorageAdapter } from "./data/storage";
 
 polyfill();
 
@@ -206,6 +249,32 @@ declare global {
 }
 
 let pwaEvent: BeforeInstallPromptEvent | null = null;
+
+const migrateIndexedDbCanvasToSqlite = async ({
+  canvasData,
+  storageAdapter,
+  collectionId,
+}: {
+  canvasData: CanvasData;
+  storageAdapter: IStorageAdapter;
+  collectionId?: string | null;
+}): Promise<string | null> => {
+  const elements = canvasData.elements ?? [];
+  if (elements.length === 0) {
+    return null;
+  }
+  const title =
+    canvasData.appState?.name || `Untitled ${new Date().toLocaleTimeString()}`;
+  const scene = await createScene({
+    title,
+    collectionId: collectionId || undefined,
+  });
+  await storageAdapter.saveCanvas(scene.id, {
+    ...canvasData,
+    appState: { ...canvasData.appState, name: title },
+  });
+  return scene.id;
+};
 
 // Adding a listener outside of the component as it may (?) need to be
 // subscribed early to catch the event.
@@ -388,16 +457,13 @@ const ExcalidrawWrapper = () => {
 
   const setUser = useSetAtom(userAtom);
   useAuth(setUser);
+  const { isLoading: authLoading } = useAuthSession();
   const user = useAtomValue(userAtom);
   const storageConfig = useAtomValue(storageConfigAtom);
-  const currentCanvasId = useAtomValue(currentCanvasIdAtom);
-  const workspaces = useAtomValue(workspacesAtom);
-  const [activeWorkspaceId, setActiveWorkspaceId] =
-    useAtom(activeWorkspaceIdAtom);
-  const [createCanvasDialogState, setCreateCanvasDialog] =
-    useAtom(createCanvasDialogAtom);
-  const [renameCanvasDialogState, setRenameCanvasDialog] =
-    useAtom(renameCanvasDialogAtom);
+  const setStorageConfig = useSetAtom(storageConfigAtom);
+  const [currentCanvasId, setCurrentCanvasId] = useAtom(currentCanvasIdAtom);
+  const [createCanvasDialogState] = useAtom(createCanvasDialogAtom);
+  const [renameCanvasDialogState] = useAtom(renameCanvasDialogAtom);
   const [saveAsDialogState] = useAtom(saveAsDialogAtom);
 
   const [saveStatus, setSaveStatus] = useState<
@@ -411,7 +477,9 @@ const ExcalidrawWrapper = () => {
   }, []);
 
   const storageAdapter: IStorageAdapter = useMemo(() => {
-    if (storageConfig.type === "default" && user) {
+    // 已登录用户默认走后端 SQLite。新注册用户 localStorage 里仍是 indexed-db，
+    // 若继续用 IndexedDB，Create Scene 会在 API 已写入 canvases 后因缺 metadata 失败。
+    if (user && storageConfig.type !== "kv" && storageConfig.type !== "s3") {
       return new BackendStorageAdapter();
     }
     if (
@@ -450,15 +518,32 @@ const ExcalidrawWrapper = () => {
     return isCollaborationLink(window.location.href);
   });
 
+  const applyDrawingDefaults = useCallback(
+    (defaults?: DrawingDefaults) => {
+      if (!excalidrawAPI) {
+        return;
+      }
+      excalidrawAPI.updateScene({
+        appState: drawingDefaultsToAppState(
+          defaults ?? loadDrawingDefaults(),
+        ),
+        captureUpdate: CaptureUpdateAction.NEVER,
+      });
+    },
+    [excalidrawAPI],
+  );
+
+  useEffect(() => {
+    applyDrawingDefaults();
+  }, [applyDrawingDefaults]);
+
   // Live-sync the AI canvas (ai-canvas) over WebSocket when it is open.
   useAiCanvasSync(excalidrawAPI, currentCanvasId);
 
   const magicSettings = useMagicSettings(excalidrawAPI);
 
   const {
-    canvases,
     handleCanvasSelect,
-    handleCanvasDelete,
     handleCanvasCreate,
     handleCanvasRename,
     handleCanvasSaveAs,
@@ -471,24 +556,49 @@ const ExcalidrawWrapper = () => {
     resetSaveStatus,
   });
 
-  const {
-    isLoading: isWorkspacesLoading,
-    createWorkspace,
-    updateWorkspace,
-    deleteWorkspace,
-    moveCanvasToWorkspace,
-  } = useWorkspaces({
-    storageAdapter,
-    setErrorMessage,
+  // AstraDraw Workspace shell 状态
+  // ---------------------------------------------------------------------------
+  const [appMode, setAppMode] = useAtom(appModeAtom);
+  const workspaceSidebarOpen = useAtomValue(workspaceSidebarOpenAtom);
+  const openWorkspaceSidebar = useSetAtom(openWorkspaceSidebarAtom);
+  const navigateToDashboard = useSetAtom(navigateToDashboardAtom);
+  const [currentWorkspace, setCurrentWorkspace] = useAtom(currentWorkspaceAtom);
+  const [currentWorkspaceSlug, setCurrentWorkspaceSlug] = useAtom(
+    currentWorkspaceSlugAtom,
+  );
+  const [currentSceneId, setCurrentSceneId] = useAtom(currentSceneIdAtom);
+  const setCurrentSceneTitle = useSetAtom(currentSceneTitleAtom);
+  const currentSceneCanEdit = useAtomValue(currentSceneCanEditAtom);
+  const setCurrentSceneCanEdit = useSetAtom(currentSceneCanEditAtom);
+  const sceneCollabEnabled = useAtomValue(sceneCollabEnabledAtom);
+  const setSceneCollabEnabled = useSetAtom(sceneCollabEnabledAtom);
+  const sceneEditLock = useAtomValue(sceneEditLockAtom);
+  const setActiveCollectionId = useSetAtom(activeCollectionIdAtom);
+  const [isAutoCollabScene, setIsAutoCollabScene] = useAtom(
+    isAutoCollabSceneAtom,
+  );
+  const autoCollabInFlightRef = useRef<string | null>(null);
+  const [privateCollectionId, setPrivateCollectionId] = useState<string | null>(
+    null,
+  );
+  const { inviteCode, clearInvite } = useShellRouteSync();
+
+  useSceneEditLock({
+    sceneId: currentSceneId,
+    canEdit: currentSceneCanEdit,
+    excalidrawAPI,
   });
 
   const saveCanvas = useCallback(async () => {
     if (!excalidrawAPI) {
       return;
     }
+    if (sceneEditLock?.locked) {
+      return;
+    }
     const { storageAdapter, currentCanvasId, refreshCanvases } =
       onChangeRef.current;
-    if (currentCanvasId) {
+    if (currentCanvasId && isBackendPersistableCanvasId(currentCanvasId)) {
       setSaveStatus("saving");
       try {
         await storageAdapter.saveCanvas(currentCanvasId, {
@@ -508,7 +618,7 @@ const ExcalidrawWrapper = () => {
         console.error(e);
       }
     }
-  }, [excalidrawAPI]);
+  }, [excalidrawAPI, sceneEditLock?.locked]);
 
   const [langCode, setLangCode] = useAppLangCode();
 
@@ -524,6 +634,8 @@ const ExcalidrawWrapper = () => {
   }
 
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
+  const initialCanvasLoadedRef = useRef(false);
+  const migratedLoginRef = useRef<string | null>(null);
 
   useEffect(() => {
     trackEvent("load", "frame", getFrame());
@@ -562,6 +674,9 @@ const ExcalidrawWrapper = () => {
 
   useEffect(() => {
     if (!excalidrawAPI || (!isCollabDisabled && !collabAPI)) {
+      return;
+    }
+    if (authLoading) {
       return;
     }
 
@@ -656,51 +771,78 @@ const ExcalidrawWrapper = () => {
         };
 
         if (!currentCanvasId) {
-          try {
-            const newCanvas = await storageAdapter.createCanvas({
-              elements: [],
-              appState: excalidrawAPI.getAppState(),
-              files: {},
-            });
-            setCurrentCanvasId(newCanvas.id);
-            data = {
-              scene: {
+          if (user) {
+            // 已登录：不要用 kv createCanvas 造 nanoid 脏行，交给 localStorage / Workspace。
+            data = null;
+          } else {
+            try {
+              const newCanvas = await storageAdapter.createCanvas({
                 elements: [],
                 appState: excalidrawAPI.getAppState(),
-              },
-              isExternalScene: false,
-            } as ResolutionType<typeof initializeScene>;
-          } catch (e) {
-            console.error(e);
-            setErrorMessage(
-              e instanceof Error ? e.message : "Failed to create a new canvas.",
-            );
-            return;
+                files: {},
+              });
+              setCurrentCanvasId(newCanvas.id);
+              data = {
+                scene: {
+                  elements: [],
+                  appState: excalidrawAPI.getAppState(),
+                },
+                isExternalScene: false,
+              } as ResolutionType<typeof initializeScene>;
+            } catch (e) {
+              console.error(e);
+              setErrorMessage(
+                e instanceof Error
+                  ? e.message
+                  : "Failed to create a new canvas.",
+              );
+              return;
+            }
           }
         } else {
           try {
-            if (currentCanvasId) {
-              const canvasData = await storageAdapter.loadCanvas(
+            let canvasData = await storageAdapter.loadCanvas(currentCanvasId);
+            if (!canvasData && isIndexedDbCanvasId(currentCanvasId)) {
+              canvasData = await new IndexedDBStorageAdapter().loadCanvas(
                 currentCanvasId,
               );
-              if (canvasData) {
-                data = {
-                  scene: {
-                    elements: canvasData.elements,
-                    appState: restoreAppState(
-                      canvasData.appState,
-                      excalidrawAPI.getAppState(),
-                    ),
-                    files: canvasData.files,
-                  },
-                  isExternalScene: false,
-                } as ResolutionType<typeof initializeScene>;
-              } else {
-                // Canvas not found, create a new one
-                setCurrentCanvasId(null); // Reset invalid id
-                // This will trigger a re-render and the logic will create a new canvas
-                return;
+            }
+            if (canvasData) {
+              if (user && isIndexedDbCanvasId(currentCanvasId)) {
+                const migratedId = await migrateIndexedDbCanvasToSqlite({
+                  canvasData,
+                  storageAdapter,
+                  collectionId: privateCollectionId,
+                });
+                if (migratedId) {
+                  setCurrentCanvasId(migratedId);
+                  appJotaiStore.set(currentSceneIdAtom, migratedId);
+                } else {
+                  setCurrentCanvasId(null);
+                }
+              } else if (
+                user &&
+                isBackendPersistableCanvasId(currentCanvasId)
+              ) {
+                appJotaiStore.set(currentSceneIdAtom, currentCanvasId);
               }
+              data = {
+                scene: {
+                  elements: canvasData.elements,
+                  appState: restoreAppState(
+                    canvasData.appState,
+                    excalidrawAPI.getAppState(),
+                  ),
+                  files: canvasData.files,
+                },
+                isExternalScene: false,
+              } as ResolutionType<typeof initializeScene>;
+            } else if (user) {
+              setCurrentCanvasId(null);
+              data = null;
+            } else {
+              setCurrentCanvasId(null);
+              return;
             }
           } catch (e) {
             console.error("Failed to load canvas data.", e);
@@ -727,15 +869,42 @@ const ExcalidrawWrapper = () => {
           loadImages(data, true);
           initialStatePromiseRef.current.promise.resolve(data.scene);
         } else {
-          initializeScene({ collabAPI, excalidrawAPI }).then(async (data) => {
-            loadImages(data, true);
-            initialStatePromiseRef.current.promise.resolve(data.scene);
+          initializeScene({ collabAPI, excalidrawAPI }).then(async (initData) => {
+            loadImages(initData, true);
+            initialStatePromiseRef.current.promise.resolve(initData.scene);
+            const localElements = initData.scene?.elements;
+            if (user && localElements && localElements.length > 0) {
+              try {
+                const migratedId = await migrateIndexedDbCanvasToSqlite({
+                  canvasData: {
+                    elements: localElements as CanvasData["elements"],
+                    appState: (initData.scene?.appState ||
+                      excalidrawAPI.getAppState()) as CanvasData["appState"],
+                    files: {},
+                  },
+                  storageAdapter,
+                  collectionId: privateCollectionId,
+                });
+                if (migratedId) {
+                  setCurrentCanvasId(migratedId);
+                  appJotaiStore.set(currentSceneIdAtom, migratedId);
+                }
+              } catch (error) {
+                console.error(
+                  "Failed to migrate localStorage canvas to sqlite:",
+                  error,
+                );
+              }
+            }
           });
         }
       }
     };
 
-    loadCanvas();
+    if (!initialCanvasLoadedRef.current) {
+      initialCanvasLoadedRef.current = true;
+      loadCanvas();
+    }
     refreshCanvases();
 
     const onHashChange = async (event: HashChangeEvent) => {
@@ -869,6 +1038,9 @@ const ExcalidrawWrapper = () => {
     setLangCode,
     storageAdapter,
     refreshCanvases,
+    authLoading,
+    user,
+    privateCollectionId,
   ]);
 
   useEffect(() => {
@@ -938,65 +1110,84 @@ const ExcalidrawWrapper = () => {
   const previousElementsRef = useRef<
     readonly OrderedExcalidrawElement[] | null
   >(null);
+  const previousSceneVersionRef = useRef(-1);
   const previousFilesRef = useRef<BinaryFiles | null>(null);
 
-  const debouncedSave = useMemo(() => {
-    const save = async (
+  const persistCanvas = useCallback(
+    async (
       elements: readonly NonDeletedExcalidrawElement[],
       appState: AppState,
       files: BinaryFiles,
     ) => {
-      const { storageAdapter, currentCanvasId } = onChangeRef.current;
-      if (currentCanvasId) {
-        setSaveStatus("saving");
-        try {
-          await storageAdapter.saveCanvas(currentCanvasId, {
-            elements,
-            appState,
-            files,
-          });
-          // Two-way sync: push user edits on AI canvases back to the mcp
-          // server so the CLI sees them and other viewers stay in sync.
-          // The canvasId query param is REQUIRED — the server rejects syncs
-          // without it, so an open canvas can never overwrite a different
-          // canvas that the AI is currently working on.
-          if (currentCanvasId.startsWith("ai-")) {
-            const payload = {
-              elements: elements.map((el) => ({ ...el })),
-            };
-            const response = await fetch(
-              `/api/elements/sync?canvasId=${encodeURIComponent(
-                currentCanvasId,
-              )}`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-              },
-            );
-            if (!response.ok) {
-              const errorBody = await response.text();
-              throw new Error(
-                `AI canvas sync failed (${response.status}): ${errorBody}`,
-              );
-            }
-          }
-          setSaveStatus("saved");
-          setLastSaveTime(new Date());
-          await onChangeRef.current.refreshCanvases();
-        } catch (e: any) {
-          if (e instanceof AuthError) {
-            setSaveStatus("login-required");
-          } else {
-            setSaveStatus("unsaved");
-          }
-          console.error(e);
-        }
+      const { storageAdapter, currentCanvasId, collabAPI } =
+        onChangeRef.current;
+      if (!currentCanvasId || !isBackendPersistableCanvasId(currentCanvasId)) {
+        return;
       }
-    };
+      if (
+        collabAPI?.isCollaborating() &&
+        !collabAPI.shouldPersistCanvas()
+      ) {
+        return;
+      }
+      setSaveStatus("saving");
+      try {
+        await storageAdapter.saveCanvas(currentCanvasId, {
+          elements,
+          appState,
+          files,
+        });
+        // Two-way sync: push user edits on AI canvases back to the mcp
+        // server so the CLI sees them and other viewers stay in sync.
+        // The canvasId query param is REQUIRED — the server rejects syncs
+        // without it, so an open canvas can never overwrite a different
+        // canvas that the AI is currently working on.
+        if (currentCanvasId.startsWith("ai-")) {
+          const payload = {
+            elements: elements.map((el) => ({ ...el })),
+          };
+          const response = await fetch(
+            `/api/elements/sync?canvasId=${encodeURIComponent(
+              currentCanvasId,
+            )}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            },
+          );
+          if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(
+              `AI canvas sync failed (${response.status}): ${errorBody}`,
+            );
+          }
+        }
+        setSaveStatus("saved");
+        setLastSaveTime(new Date());
+        if (!collabAPI?.isCollaborating()) {
+          await onChangeRef.current.refreshCanvases();
+        }
+      } catch (e: any) {
+        if (e instanceof AuthError) {
+          setSaveStatus("login-required");
+        } else {
+          setSaveStatus("unsaved");
+        }
+        console.error(e);
+      }
+    },
+    [],
+  );
 
-    return debounce(save, 5000);
-  }, []);
+  const debouncedSave = useMemo(
+    () => debounce(persistCanvas, 5000),
+    [persistCanvas],
+  );
+  const collabDebouncedSave = useMemo(
+    () => debounce(persistCanvas, 15000),
+    [persistCanvas],
+  );
 
   const onChange = (
     elements: readonly OrderedExcalidrawElement[],
@@ -1007,27 +1198,33 @@ const ExcalidrawWrapper = () => {
       collabAPI.syncElements(elements);
     }
 
+    const sceneVersion = getSceneVersion(elements);
     const didElementsChange =
-      previousElementsRef.current !== elements ||
-      JSON.stringify(previousElementsRef.current) !== JSON.stringify(elements);
+      previousElementsRef.current !== elements &&
+      sceneVersion !== previousSceneVersionRef.current;
 
-    const didFilesChange =
-      previousFilesRef.current !== files ||
-      JSON.stringify(previousFilesRef.current) !== JSON.stringify(files);
+    const didFilesChange = previousFilesRef.current !== files;
 
-    if (collabAPI?.isCollaborating()) {
-      collabAPI.syncElements(elements);
-    } else if (currentCanvasId && (didElementsChange || didFilesChange)) {
+    if (
+      currentCanvasId &&
+      (didElementsChange || didFilesChange) &&
+      !sceneEditLock?.locked &&
+      (!collabAPI?.isCollaborating() || currentSceneId === currentCanvasId) &&
+      (!collabAPI?.isCollaborating() || collabAPI.shouldPersistCanvas())
+    ) {
       setSaveStatus("unsaved");
-      debouncedSave(
+      const save = collabAPI?.isCollaborating()
+        ? collabDebouncedSave
+        : debouncedSave;
+      save(
         elements as readonly NonDeletedExcalidrawElement[],
         appState,
         files,
       );
     }
 
-    // Update refs for the next comparison
     previousElementsRef.current = elements;
+    previousSceneVersionRef.current = sceneVersion;
     previousFilesRef.current = files;
 
     // this check is redundant, but since this is a hot path, it's best
@@ -1137,6 +1334,361 @@ const ExcalidrawWrapper = () => {
     [setShareDialogState],
   );
 
+  // Workspace shell 桥接
+  // ---------------------------------------------------------------------------
+  // scene id 与 canvas id 同源，因此新建场景后先写一份空白画布，
+  // 之后所有读写都复用既有的 storageAdapter 路径（含 AI 同步、协作）。
+  const handleNewScene = useCallback(
+    async (collectionId?: string) => {
+      if (!excalidrawAPI) {
+        return;
+      }
+      try {
+        const title = `Untitled ${new Date().toLocaleTimeString()}`;
+        const targetCollectionId =
+          collectionId || privateCollectionId || undefined;
+
+        const scene = await createScene({
+          title,
+          collectionId: targetCollectionId,
+        });
+
+        excalidrawAPI.resetScene();
+        await storageAdapter.saveCanvas(scene.id, {
+          elements: [],
+          appState: { ...excalidrawAPI.getAppState(), name: title },
+          files: {},
+        });
+
+        setCurrentCanvasId(scene.id);
+        setCurrentSceneId(scene.id);
+        setCurrentSceneTitle(title);
+        setCurrentSceneCanEdit(true);
+        setSceneCollabEnabled(false);
+        if (targetCollectionId) {
+          setActiveCollectionId(targetCollectionId);
+        }
+        openWorkspaceSidebar();
+        setAppMode("canvas");
+        resetSaveStatus();
+        await refreshCanvases();
+
+        const slug = currentWorkspace?.slug || currentWorkspaceSlug;
+        if (slug) {
+          window.history.pushState(
+            { sceneId: scene.id },
+            "",
+            buildSceneUrl(slug, scene.id),
+          );
+        }
+      } catch (error) {
+        console.error("Failed to create new scene:", error);
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Failed to create a new scene.",
+        );
+      }
+    },
+    [
+      excalidrawAPI,
+      storageAdapter,
+      privateCollectionId,
+      currentWorkspace?.slug,
+      currentWorkspaceSlug,
+      setCurrentCanvasId,
+      setCurrentSceneId,
+      setCurrentSceneTitle,
+      setCurrentSceneCanEdit,
+      setSceneCollabEnabled,
+      setActiveCollectionId,
+      openWorkspaceSidebar,
+      setAppMode,
+      resetSaveStatus,
+      refreshCanvases,
+    ],
+  );
+
+  // 登录后持久化为后端 SQLite，并把当前 IndexedDB 画布（有内容时）迁入 Workspace scene。
+  useEffect(() => {
+    if (!user || authLoading) {
+      if (!user) {
+        migratedLoginRef.current = null;
+      }
+      return;
+    }
+    if (storageConfig.type !== "kv" && storageConfig.type !== "s3") {
+      if (storageConfig.type !== "default") {
+        setStorageConfig({ ...storageConfig, type: "default" });
+      }
+    }
+  }, [user, authLoading, storageConfig, setStorageConfig]);
+
+  useEffect(() => {
+    if (!user || authLoading || !excalidrawAPI) {
+      return;
+    }
+    if (storageConfig.type === "kv" || storageConfig.type === "s3") {
+      return;
+    }
+    if (migratedLoginRef.current === user.id) {
+      return;
+    }
+    // 首次进入由 loadCanvas 负责；这里只处理「已经在画」时登录。
+    if (!initialCanvasLoadedRef.current) {
+      return;
+    }
+
+    const run = async () => {
+      if (currentSceneId && !isIndexedDbCanvasId(currentSceneId)) {
+        if (isIndexedDbCanvasId(currentCanvasId)) {
+          setCurrentCanvasId(null);
+        }
+        migratedLoginRef.current = user.id;
+        return;
+      }
+      if (isBackendPersistableCanvasId(currentCanvasId)) {
+        migratedLoginRef.current = user.id;
+        return;
+      }
+
+      const elements = excalidrawAPI.getSceneElements();
+      if (elements.length === 0) {
+        if (isIndexedDbCanvasId(currentCanvasId)) {
+          setCurrentCanvasId(null);
+        }
+        migratedLoginRef.current = user.id;
+        return;
+      }
+
+      try {
+        const migratedId = await migrateIndexedDbCanvasToSqlite({
+          canvasData: {
+            elements,
+            appState: excalidrawAPI.getAppState(),
+            files: excalidrawAPI.getFiles(),
+          },
+          storageAdapter,
+          collectionId: privateCollectionId,
+        });
+        migratedLoginRef.current = user.id;
+        if (!migratedId) {
+          if (isIndexedDbCanvasId(currentCanvasId)) {
+            setCurrentCanvasId(null);
+          }
+          return;
+        }
+        setCurrentCanvasId(migratedId);
+        setCurrentSceneId(migratedId);
+        setCurrentSceneTitle(excalidrawAPI.getAppState().name || "Untitled");
+        setAppMode("canvas");
+        const slug = currentWorkspace?.slug || currentWorkspaceSlug;
+        if (slug) {
+          window.history.pushState(
+            { sceneId: migratedId },
+            "",
+            buildSceneUrl(slug, migratedId),
+          );
+        }
+        await refreshCanvases();
+      } catch (error) {
+        console.error("Failed to migrate local canvas to sqlite:", error);
+        migratedLoginRef.current = user.id;
+      }
+    };
+
+    void run();
+  }, [
+    user,
+    authLoading,
+    excalidrawAPI,
+    storageConfig.type,
+    currentSceneId,
+    currentCanvasId,
+    storageAdapter,
+    privateCollectionId,
+    currentWorkspace?.slug,
+    currentWorkspaceSlug,
+    setCurrentCanvasId,
+    setCurrentSceneId,
+    setCurrentSceneTitle,
+    setAppMode,
+    refreshCanvases,
+  ]);
+
+  // 侧栏选中场景后，走既有画布加载路径把内容拉进编辑器。
+  const handleCanvasSelectRef = useRef(handleCanvasSelect);
+  handleCanvasSelectRef.current = handleCanvasSelect;
+
+  useEffect(() => {
+    if (
+      !excalidrawAPI ||
+      !currentSceneId ||
+      currentSceneId === currentCanvasId
+    ) {
+      return;
+    }
+    handleCanvasSelectRef.current(currentSceneId);
+  }, [excalidrawAPI, currentSceneId, currentCanvasId]);
+
+  // 仅当该 Scene 已主动「允许一起编辑」时才进 WS 房间。
+  useEffect(() => {
+    if (
+      !excalidrawAPI ||
+      !collabAPI ||
+      isCollabDisabled ||
+      !currentCanvasId ||
+      !isBackendPersistableCanvasId(currentCanvasId) ||
+      !sceneCollabEnabled
+    ) {
+      return;
+    }
+    if (isCollaborationLink(window.location.href)) {
+      return;
+    }
+    // 正在把 URL 上的 scene 载入画布，等 currentCanvasId 对齐后再进房。
+    if (currentSceneId && currentSceneId !== currentCanvasId) {
+      return;
+    }
+
+    const sceneId = currentCanvasId;
+    if (
+      collabAPI.isCollaborating() &&
+      collabAPI.getRoomId() === sceneId
+    ) {
+      setIsAutoCollabScene(true);
+      return;
+    }
+    if (autoCollabInFlightRef.current === sceneId) {
+      return;
+    }
+
+    let cancelled = false;
+    autoCollabInFlightRef.current = sceneId;
+    (async () => {
+      try {
+        const { roomId, roomKey } = await startSceneCollabRoom(sceneId);
+        if (cancelled) {
+          return;
+        }
+        if (collabAPI.getRoomId() === roomId && collabAPI.isCollaborating()) {
+          setIsAutoCollabScene(true);
+          return;
+        }
+        // 只在换房间时停旧房；禁止对同一房间 stop+start（会踢掉自己的旧 socket）。
+        if (
+          collabAPI.isCollaborating() &&
+          collabAPI.getRoomId() &&
+          collabAPI.getRoomId() !== roomId
+        ) {
+          collabAPI.stopCollaboration(false);
+        }
+        await collabAPI.startCollaboration({
+          roomId,
+          roomKey,
+          isAutoCollab: true,
+        });
+        if (!cancelled) {
+          setIsAutoCollabScene(true);
+        }
+      } catch (error) {
+        console.error("Failed to start workspace scene collaboration:", error);
+      } finally {
+        if (autoCollabInFlightRef.current === sceneId) {
+          autoCollabInFlightRef.current = null;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    excalidrawAPI,
+    collabAPI,
+    isCollabDisabled,
+    currentSceneId,
+    currentCanvasId,
+    sceneCollabEnabled,
+    setIsAutoCollabScene,
+  ]);
+
+  useEffect(() => {
+    if (!collabAPI || !isAutoCollabScene) {
+      return;
+    }
+    if (currentSceneId && sceneCollabEnabled) {
+      return;
+    }
+    if (collabAPI.isCollaborating()) {
+      collabAPI.stopCollaboration(false);
+    }
+    setIsAutoCollabScene(false);
+    if (!currentSceneId) {
+      setCurrentSceneCanEdit(null);
+    }
+  }, [
+    currentSceneId,
+    sceneCollabEnabled,
+    isAutoCollabScene,
+    collabAPI,
+    setIsAutoCollabScene,
+    setCurrentSceneCanEdit,
+  ]);
+
+  const handleUpdateWorkspace = useCallback(
+    async (data: { name?: string }) => {
+      if (!currentWorkspace) {
+        throw new Error("No workspace selected");
+      }
+      const updated = await updateWorkspaceApi(currentWorkspace.id, data);
+      setCurrentWorkspace(updated as WorkspaceData);
+      if (updated.slug !== currentWorkspace.slug) {
+        setCurrentWorkspaceSlug(updated.slug);
+      }
+    },
+    [currentWorkspace, setCurrentWorkspace, setCurrentWorkspaceSlug],
+  );
+
+  const handleUploadWorkspaceAvatar = useCallback(
+    async (file: File) => {
+      if (!currentWorkspace) {
+        throw new Error("No workspace selected");
+      }
+      const updated = await uploadWorkspaceAvatar(currentWorkspace.id, file);
+      setCurrentWorkspace(updated as WorkspaceData);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workspaces.all,
+      });
+    },
+    [currentWorkspace, setCurrentWorkspace],
+  );
+
+  const handleDeleteWorkspace = useCallback(async () => {
+    if (!currentWorkspace) {
+      throw new Error("No workspace selected");
+    }
+    await deleteWorkspaceApi(currentWorkspace.id);
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.workspaces.all,
+    });
+
+    const remaining = await listWorkspaces();
+    if (remaining.length > 0) {
+      setCurrentWorkspace(remaining[0] as WorkspaceData);
+      setCurrentWorkspaceSlug(remaining[0].slug);
+      navigateToDashboard();
+    } else {
+      setCurrentWorkspace(null);
+      setCurrentWorkspaceSlug(null);
+    }
+  }, [
+    currentWorkspace,
+    setCurrentWorkspace,
+    setCurrentWorkspaceSlug,
+    navigateToDashboard,
+  ]);
+
   // browsers generally prevent infinite self-embedding, there are
   // cases where it still happens, and while we disallow self-embedding
   // by not whitelisting our own origin, this serves as an additional guard
@@ -1195,421 +1747,481 @@ const ExcalidrawWrapper = () => {
     },
   };
 
+  const isWorkspaceAdmin = currentWorkspace?.role === "ADMIN";
+
+  if (inviteCode) {
+    return (
+      <InviteAcceptPage
+        inviteCode={inviteCode}
+        onSuccess={(workspace: Workspace) => {
+          clearInvite();
+          setCurrentWorkspace(workspace as WorkspaceData);
+          setCurrentWorkspaceSlug(workspace.slug);
+          navigateToDashboard();
+        }}
+        onCancel={() => {
+          clearInvite();
+          window.history.replaceState({}, document.title, "/");
+        }}
+      />
+    );
+  }
+
   return (
     <div
       style={{ height: "100%" }}
       className={clsx("excalidraw-app", {
         "is-collaborating": isCollaborating,
+        "workspace-sidebar-open": workspaceSidebarOpen,
       })}
     >
-      {/* 左侧滑出侧边栏（copy AstraDraw WorkspaceSidebar：app 根容器 flex
+      {/* 左侧滑出侧边栏（AstraDraw WorkspaceSidebar：app 根容器 flex
           子元素，margin-left 负值滑出，非 fixed 定位） */}
       <WorkspaceSidebar
-        canvases={canvases}
-        workspaces={workspaces}
-        currentCanvasId={currentCanvasId}
-        activeWorkspaceId={activeWorkspaceId}
-        onWorkspaceFilterChange={(id) => setActiveWorkspaceId(id)}
-        onCanvasSelect={handleCanvasSelect}
-        onCanvasDelete={handleCanvasDelete}
-        onCreateWorkspace={(name, note) => createWorkspace(name, note)}
-        onRenameWorkspace={(id, name) => updateWorkspace(id, { name })}
-        onDeleteWorkspace={async (id) => {
-          await deleteWorkspace(id);
-          await refreshCanvases();
+        onNewScene={handleNewScene}
+        currentSceneId={currentSceneId}
+        workspace={currentWorkspace}
+        onWorkspaceChange={(workspace, privateId) => {
+          setCurrentWorkspace(workspace as WorkspaceData);
+          setCurrentWorkspaceSlug(workspace.slug);
+          setPrivateCollectionId(privateId);
         }}
-        onMoveCanvas={async (canvasId, workspaceId) => {
-          await moveCanvasToWorkspace(canvasId, workspaceId);
-          await refreshCanvases();
-        }}
-        onCreateCanvas={() => setCreateCanvasDialog({ isOpen: true })}
+        onCurrentSceneTitleChange={setCurrentSceneTitle}
       />
-      <Excalidraw
-        onExcalidrawAPI={excalidrawRefCallback}
-        onChange={onChange}
-        initialData={initialStatePromiseRef.current.promise}
-        isCollaborating={isCollaborating}
-        onPointerUpdate={collabAPI?.onPointerUpdate}
-        UIOptions={{
-          canvasActions: {
-            toggleTheme: true,
-            export: {
-              onExportToBackend,
-              renderCustomUI: excalidrawAPI
-                ? (elements, appState, files) => {
-                    return (
-                      <ExportToExcalidrawPlus
-                        elements={elements}
-                        appState={appState}
-                        files={files}
-                        name={excalidrawAPI.getName()}
-                        onError={(error) => {
-                          excalidrawAPI?.updateScene({
-                            appState: {
-                              errorMessage: error.message,
-                            },
-                          });
-                        }}
-                        onSuccess={() => {
-                          excalidrawAPI.updateScene({
-                            appState: { openDialog: null },
-                          });
-                        }}
-                      />
-                    );
-                  }
-                : undefined,
-            },
-          },
-        }}
-        langCode={langCode}
-        renderCustomStats={renderCustomStats}
-        detectScroll={false}
-        handleKeyboardGlobally={true}
-        autoFocus={true}
-        theme={editorTheme}
-        renderTopLeftUI={(isMobile: boolean) => {
-          let statusMessage = "";
-          if (saveStatus === "saving") {
-            statusMessage = t("canvas.saving");
-          } else if (saveStatus === "unsaved") {
-            statusMessage = t("canvas.unsavedChanges");
-          } else if (saveStatus === "login-required") {
-            statusMessage = t("canvas.loginToSave");
-          }
 
-          return (
-            <div style={{ display: "flex", alignItems: "center" }}>
-              {statusMessage && (
-                <div
-                  style={{
-                    marginLeft: "0.5rem",
-                    color: "var(--color-gray-40)",
-                    fontSize: "0.8em",
-                    fontStyle: "italic",
-                  }}
-                >
-                  {statusMessage}
-                </div>
-              )}
-            </div>
-          );
-        }}
-        renderTopRightUI={(isMobile) => {
-          if (isMobile || !collabAPI || isCollabDisabled) {
-            return null;
-          }
-          return (
-            <div className="top-right-ui">
-              {collabError.message && <CollabError collabError={collabError} />}
-              <LiveCollaborationTrigger
-                isCollaborating={isCollaborating}
-                onSelect={() =>
-                  setShareDialogState({ isOpen: true, type: "share" })
-                }
-              />
-            </div>
-          );
-        }}
-        onLinkOpen={(element, event) => {
-          if (element.link && isElementLink(element.link)) {
-            event.preventDefault();
-            excalidrawAPI?.setViewport({
-              target: element.link,
-              fit: "scale-down",
-              animation: true,
-            });
-          }
-        }}
+      {user && <QuickSearchModal />}
+
+      <div
+        className="excalidraw-app__main excalidraw-app__dashboard"
+        style={{ display: appMode === "dashboard" ? "block" : "none" }}
+        aria-hidden={appMode !== "dashboard"}
+        inert={appMode !== "dashboard" ? true : undefined}
       >
-        <DefaultSidebar __fallback />
-        <WorkspaceSidebarTrigger />
-        <AppMainMenu
-          onCollabDialogOpen={onCollabDialogOpen}
-          isCollaborating={isCollaborating}
-          isCollabEnabled={!isCollabDisabled}
+        <WorkspaceMainContent
+          isAdmin={isWorkspaceAdmin}
+          onNewScene={handleNewScene}
+          onUpdateWorkspace={handleUpdateWorkspace}
+          onUploadWorkspaceAvatar={handleUploadWorkspaceAvatar}
+          onDeleteWorkspace={handleDeleteWorkspace}
           theme={appTheme}
-          setTheme={(theme) => setAppTheme(theme)}
-          refresh={() => forceRefresh((prev) => !prev)}
-          onStorageSettingsClick={() => setIsStorageSettingsOpen(true)}
+          setTheme={setAppTheme}
+          onDrawingDefaultsChange={applyDrawingDefaults}
         />
-        <AppWelcomeScreen
-          onCollabDialogOpen={onCollabDialogOpen}
-          isCollabEnabled={!isCollabDisabled}
-        />
-        <OverwriteConfirmDialog>
-          <OverwriteConfirmDialog.Actions.ExportToImage />
-          <OverwriteConfirmDialog.Actions.SaveToDisk />
-          {excalidrawAPI && (
-            <OverwriteConfirmDialog.Action
-              title={t("overwriteConfirm.action.excalidrawPlus.title")}
-              actionLabel={t("overwriteConfirm.action.excalidrawPlus.button")}
-              onClick={() => {
-                exportToExcalidrawPlus(
-                  excalidrawAPI.getSceneElements(),
-                  excalidrawAPI.getAppState(),
-                  excalidrawAPI.getFiles(),
-                  excalidrawAPI.getName(),
-                );
-              }}
-            >
-              {t("overwriteConfirm.action.excalidrawPlus.description")}
-            </OverwriteConfirmDialog.Action>
-          )}
-        </OverwriteConfirmDialog>
-        <AppFooter
-          onChange={() => excalidrawAPI?.refresh()}
-          excalidrawAPI={excalidrawAPI}
-        />
-        {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
+      </div>
 
-        <TTDDialogTrigger />
-        {isCollaborating && isOffline && (
-          <div className="collab-offline-warning">
-            {t("alerts.collabOfflineWarning")}
-          </div>
-        )}
-        {latestShareableLink && (
-          <ShareableLinkDialog
-            link={latestShareableLink}
-            onCloseRequest={() => setLatestShareableLink(null)}
-            setErrorMessage={setErrorMessage}
-          />
-        )}
-        {excalidrawAPI && !isCollabDisabled && (
-          <Collab excalidrawAPI={excalidrawAPI} />
-        )}
+      <div
+        className="excalidraw-app__main excalidraw-app__canvas"
+        style={{
+          display: appMode === "canvas" ? "block" : "none",
+          height: "100%",
+        }}
+        aria-hidden={appMode !== "canvas"}
+        inert={appMode !== "canvas" ? true : undefined}
+      >
+        <Excalidraw
+          onExcalidrawAPI={excalidrawRefCallback}
+          onChange={onChange}
+          initialData={initialStatePromiseRef.current.promise}
+          isCollaborating={isCollaborating}
+          viewModeEnabled={
+            (!!currentSceneId && currentSceneCanEdit === false) ||
+            sceneEditLock?.locked === true
+          }
+          onPointerUpdate={collabAPI?.onPointerUpdate}
+          UIOptions={{
+            canvasActions: {
+              toggleTheme: true,
+              export: {
+                onExportToBackend,
+                renderCustomUI: excalidrawAPI
+                  ? (elements, appState, files) => {
+                      return (
+                        <ExportToExcalidrawPlus
+                          elements={elements}
+                          appState={appState}
+                          files={files}
+                          name={excalidrawAPI.getName()}
+                          onError={(error) => {
+                            excalidrawAPI?.updateScene({
+                              appState: {
+                                errorMessage: error.message,
+                              },
+                            });
+                          }}
+                          onSuccess={() => {
+                            excalidrawAPI.updateScene({
+                              appState: { openDialog: null },
+                            });
+                          }}
+                        />
+                      );
+                    }
+                  : undefined,
+              },
+            },
+          }}
+          langCode={langCode}
+          renderCustomStats={renderCustomStats}
+          detectScroll={false}
+          handleKeyboardGlobally={true}
+          autoFocus={true}
+          theme={editorTheme}
+          renderTopLeftUI={(isMobile: boolean) => {
+            let statusMessage = "";
+            if (saveStatus === "saving") {
+              statusMessage = t("canvas.saving");
+            } else if (saveStatus === "unsaved") {
+              statusMessage = t("canvas.unsavedChanges");
+            } else if (saveStatus === "login-required") {
+              statusMessage = t("canvas.loginToSave");
+            }
 
-        {isStorageSettingsOpen && (
-          <StorageSettingsDialog
-            onClose={() => setIsStorageSettingsOpen(false)}
-          />
-        )}
-
-        {createCanvasDialogState.isOpen && (
-          <CreateCanvasDialog onCanvasCreate={handleCanvasCreate} />
-        )}
-        {renameCanvasDialogState.isOpen && (
-          <RenameCanvasDialog onCanvasRename={handleCanvasRename} />
-        )}
-        {saveAsDialogState.isOpen && (
-          <SaveAsDialog onCanvasSaveAs={handleCanvasSaveAs} />
-        )}
-
-        <ShareDialog
-          collabAPI={collabAPI}
-          onExportToBackend={async () => {
-            if (excalidrawAPI) {
-              try {
-                await onExportToBackend(
-                  excalidrawAPI.getSceneElements(),
-                  excalidrawAPI.getAppState(),
-                  excalidrawAPI.getFiles(),
-                );
-              } catch (error: any) {
-                setErrorMessage(error.message);
-              }
+            return (
+              <div style={{ display: "flex", alignItems: "center" }}>
+                {statusMessage && (
+                  <div
+                    style={{
+                      marginLeft: "0.5rem",
+                      color: "var(--color-gray-40)",
+                      fontSize: "0.8em",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    {statusMessage}
+                  </div>
+                )}
+              </div>
+            );
+          }}
+          renderTopRightUI={(isMobile) => {
+            if (isMobile || !collabAPI || isCollabDisabled) {
+              return null;
+            }
+            return (
+              <div className="top-right-ui">
+                {collabError.message && (
+                  <CollabError collabError={collabError} />
+                )}
+                <LiveCollaborationTrigger
+                  isCollaborating={isCollaborating}
+                  onSelect={() =>
+                    setShareDialogState({ isOpen: true, type: "share" })
+                  }
+                />
+              </div>
+            );
+          }}
+          onLinkOpen={(element, event) => {
+            if (element.link && isElementLink(element.link)) {
+              event.preventDefault();
+              excalidrawAPI?.setViewport({
+                target: element.link,
+                fit: "scale-down",
+                animation: true,
+              });
             }
           }}
-        />
-
-        <MagicSettings {...magicSettings} />
-
-        {errorMessage && (
-          <ErrorDialog onClose={() => setErrorMessage("")}>
-            {errorMessage}
-          </ErrorDialog>
-        )}
-
-        <CommandPalette
-          customCommandPaletteItems={[
-            {
-              label: t("labels.liveCollaboration"),
-              category: DEFAULT_CATEGORIES.app,
-              keywords: [
-                "team",
-                "multiplayer",
-                "share",
-                "public",
-                "session",
-                "invite",
-              ],
-              icon: usersIcon,
-              perform: () => {
-                setShareDialogState({
-                  isOpen: true,
-                  type: "collaborationOnly",
-                });
-              },
-            },
-            {
-              label: t("roomDialog.button_stopSession"),
-              category: DEFAULT_CATEGORIES.app,
-              predicate: () => !!collabAPI?.isCollaborating(),
-              keywords: [
-                "stop",
-                "session",
-                "end",
-                "leave",
-                "close",
-                "exit",
-                "collaboration",
-              ],
-              perform: () => {
-                if (collabAPI) {
-                  collabAPI.stopCollaboration();
-                  if (!collabAPI.isCollaborating()) {
-                    setShareDialogState({ isOpen: false });
-                  }
-                }
-              },
-            },
-            {
-              label: t("labels.share"),
-              category: DEFAULT_CATEGORIES.app,
-              predicate: true,
-              icon: share,
-              keywords: [
-                "link",
-                "shareable",
-                "readonly",
-                "export",
-                "publish",
-                "snapshot",
-                "url",
-                "collaborate",
-                "invite",
-              ],
-              perform: async () => {
-                setShareDialogState({ isOpen: true, type: "share" });
-              },
-            },
-            {
-              label: "GitHub",
-              icon: GithubIcon,
-              category: DEFAULT_CATEGORIES.links,
-              predicate: true,
-              keywords: [
-                "issues",
-                "bugs",
-                "requests",
-                "report",
-                "features",
-                "social",
-                "community",
-              ],
-              perform: () => {
-                window.open(
-                  "https://github.com/excalidraw/excalidraw",
-                  "_blank",
-                  "noopener noreferrer",
-                );
-              },
-            },
-            {
-              label: t("labels.followUs"),
-              icon: XBrandIcon,
-              category: DEFAULT_CATEGORIES.links,
-              predicate: true,
-              keywords: ["twitter", "contact", "social", "community"],
-              perform: () => {
-                window.open(
-                  "https://x.com/excalidraw",
-                  "_blank",
-                  "noopener noreferrer",
-                );
-              },
-            },
-            {
-              label: t("labels.discordChat"),
-              category: DEFAULT_CATEGORIES.links,
-              predicate: true,
-              icon: DiscordIcon,
-              keywords: [
-                "chat",
-                "talk",
-                "contact",
-                "bugs",
-                "requests",
-                "report",
-                "feedback",
-                "suggestions",
-                "social",
-                "community",
-              ],
-              perform: () => {
-                window.open(
-                  "https://discord.gg/UexuTaE",
-                  "_blank",
-                  "noopener noreferrer",
-                );
-              },
-            },
-            {
-              label: "YouTube",
-              icon: youtubeIcon,
-              category: DEFAULT_CATEGORIES.links,
-              predicate: true,
-              keywords: ["features", "tutorials", "howto", "help", "community"],
-              perform: () => {
-                window.open(
-                  "https://youtube.com/@excalidraw",
-                  "_blank",
-                  "noopener noreferrer",
-                );
-              },
-            },
-            ...(isExcalidrawPlusSignedUser
-              ? [
-                  {
-                    ...ExcalidrawPlusAppCommand,
-                    label: "Sign in / Go to Excalidraw+",
-                  },
-                ]
-              : [ExcalidrawPlusCommand, ExcalidrawPlusAppCommand]),
-
-            {
-              label: t("overwriteConfirm.action.excalidrawPlus.button"),
-              category: DEFAULT_CATEGORIES.export,
-              icon: exportToPlus,
-              predicate: true,
-              keywords: ["plus", "export", "save", "backup"],
-              perform: () => {
-                if (excalidrawAPI) {
+        >
+          {/* 评论：侧栏 comments tab + 画布图钉层 + 弹窗 + C 键。
+              这里的 DefaultSidebar 是 host 实例，会顶掉 LayerUI 的 fallback。
+              不要再额外挂一份 DefaultSidebar __fallback，否则会同时存在两个
+              Island，点侧栏会被另一份的 useOutsideClick 当成外部点击而关闭。 */}
+          <CommentsMount excalidrawAPI={excalidrawAPI} />
+          <SceneEditLockBanner />
+          <WorkspaceSidebarTrigger />
+          <AppMainMenu
+            onCollabDialogOpen={onCollabDialogOpen}
+            isCollaborating={isCollaborating}
+            isCollabEnabled={!isCollabDisabled}
+            theme={appTheme}
+            setTheme={(theme) => setAppTheme(theme)}
+            refresh={() => forceRefresh((prev) => !prev)}
+            onStorageSettingsClick={() => setIsStorageSettingsOpen(true)}
+          />
+          <AppWelcomeScreen
+            onCollabDialogOpen={onCollabDialogOpen}
+            isCollabEnabled={!isCollabDisabled}
+          />
+          <OverwriteConfirmDialog>
+            <OverwriteConfirmDialog.Actions.ExportToImage />
+            <OverwriteConfirmDialog.Actions.SaveToDisk />
+            {excalidrawAPI && (
+              <OverwriteConfirmDialog.Action
+                title={t("overwriteConfirm.action.excalidrawPlus.title")}
+                actionLabel={t("overwriteConfirm.action.excalidrawPlus.button")}
+                onClick={() => {
                   exportToExcalidrawPlus(
                     excalidrawAPI.getSceneElements(),
                     excalidrawAPI.getAppState(),
                     excalidrawAPI.getFiles(),
                     excalidrawAPI.getName(),
                   );
-                }
-              },
-            },
-            {
-              label: t("labels.installPWA"),
-              category: DEFAULT_CATEGORIES.app,
-              predicate: () => !!pwaEvent,
-              perform: () => {
-                if (pwaEvent) {
-                  pwaEvent.prompt();
-                  pwaEvent.userChoice.then(() => {
-                    // event cannot be reused, but we'll hopefully
-                    // grab new one as the event should be fired again
-                    pwaEvent = null;
-                  });
-                }
-              },
-            },
-          ]}
-        />
-        {isVisualDebuggerEnabled() && excalidrawAPI && (
-          <DebugCanvas
-            appState={excalidrawAPI.getAppState()}
-            scale={window.devicePixelRatio}
-            ref={debugCanvasRef}
+                }}
+              >
+                {t("overwriteConfirm.action.excalidrawPlus.description")}
+              </OverwriteConfirmDialog.Action>
+            )}
+          </OverwriteConfirmDialog>
+          <AppFooter
+            onChange={() => excalidrawAPI?.refresh()}
+            excalidrawAPI={excalidrawAPI}
           />
-        )}
-      </Excalidraw>
+          {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
+
+          <TTDDialogTrigger />
+          {isCollaborating && isOffline && (
+            <div className="collab-offline-warning">
+              {t("alerts.collabOfflineWarning")}
+            </div>
+          )}
+          {latestShareableLink && (
+            <ShareableLinkDialog
+              link={latestShareableLink}
+              onCloseRequest={() => setLatestShareableLink(null)}
+              setErrorMessage={setErrorMessage}
+            />
+          )}
+          {excalidrawAPI && !isCollabDisabled && (
+            <Collab excalidrawAPI={excalidrawAPI} />
+          )}
+
+          {isStorageSettingsOpen && (
+            <StorageSettingsDialog
+              onClose={() => setIsStorageSettingsOpen(false)}
+            />
+          )}
+
+          {createCanvasDialogState.isOpen && (
+            <CreateCanvasDialog onCanvasCreate={handleCanvasCreate} />
+          )}
+          {renameCanvasDialogState.isOpen && (
+            <RenameCanvasDialog onCanvasRename={handleCanvasRename} />
+          )}
+          {saveAsDialogState.isOpen && (
+            <SaveAsDialog onCanvasSaveAs={handleCanvasSaveAs} />
+          )}
+
+          <ShareDialog
+            collabAPI={collabAPI}
+            onExportToBackend={async () => {
+              if (excalidrawAPI) {
+                try {
+                  await onExportToBackend(
+                    excalidrawAPI.getSceneElements(),
+                    excalidrawAPI.getAppState(),
+                    excalidrawAPI.getFiles(),
+                  );
+                } catch (error: any) {
+                  setErrorMessage(error.message);
+                }
+              }
+            }}
+          />
+
+          <MagicSettings {...magicSettings} />
+
+          {errorMessage && (
+            <ErrorDialog onClose={() => setErrorMessage("")}>
+              {errorMessage}
+            </ErrorDialog>
+          )}
+
+          <CommandPalette
+            customCommandPaletteItems={[
+              {
+                label: t("labels.liveCollaboration"),
+                category: DEFAULT_CATEGORIES.app,
+                keywords: [
+                  "team",
+                  "multiplayer",
+                  "share",
+                  "public",
+                  "session",
+                  "invite",
+                ],
+                icon: usersIcon,
+                perform: () => {
+                  setShareDialogState({
+                    isOpen: true,
+                    type: "collaborationOnly",
+                  });
+                },
+              },
+              {
+                label: t("roomDialog.button_stopSession"),
+                category: DEFAULT_CATEGORIES.app,
+                predicate: () => !!collabAPI?.isCollaborating(),
+                keywords: [
+                  "stop",
+                  "session",
+                  "end",
+                  "leave",
+                  "close",
+                  "exit",
+                  "collaboration",
+                ],
+                perform: () => {
+                  if (collabAPI) {
+                    collabAPI.stopCollaboration();
+                    if (!collabAPI.isCollaborating()) {
+                      setShareDialogState({ isOpen: false });
+                    }
+                  }
+                },
+              },
+              {
+                label: t("labels.share"),
+                category: DEFAULT_CATEGORIES.app,
+                predicate: true,
+                icon: share,
+                keywords: [
+                  "link",
+                  "shareable",
+                  "readonly",
+                  "export",
+                  "publish",
+                  "snapshot",
+                  "url",
+                  "collaborate",
+                  "invite",
+                ],
+                perform: async () => {
+                  setShareDialogState({ isOpen: true, type: "share" });
+                },
+              },
+              {
+                label: "GitHub",
+                icon: GithubIcon,
+                category: DEFAULT_CATEGORIES.links,
+                predicate: true,
+                keywords: [
+                  "issues",
+                  "bugs",
+                  "requests",
+                  "report",
+                  "features",
+                  "social",
+                  "community",
+                ],
+                perform: () => {
+                  window.open(
+                    "https://github.com/excalidraw/excalidraw",
+                    "_blank",
+                    "noopener noreferrer",
+                  );
+                },
+              },
+              {
+                label: t("labels.followUs"),
+                icon: XBrandIcon,
+                category: DEFAULT_CATEGORIES.links,
+                predicate: true,
+                keywords: ["twitter", "contact", "social", "community"],
+                perform: () => {
+                  window.open(
+                    "https://x.com/excalidraw",
+                    "_blank",
+                    "noopener noreferrer",
+                  );
+                },
+              },
+              {
+                label: t("labels.discordChat"),
+                category: DEFAULT_CATEGORIES.links,
+                predicate: true,
+                icon: DiscordIcon,
+                keywords: [
+                  "chat",
+                  "talk",
+                  "contact",
+                  "bugs",
+                  "requests",
+                  "report",
+                  "feedback",
+                  "suggestions",
+                  "social",
+                  "community",
+                ],
+                perform: () => {
+                  window.open(
+                    "https://discord.gg/UexuTaE",
+                    "_blank",
+                    "noopener noreferrer",
+                  );
+                },
+              },
+              {
+                label: "YouTube",
+                icon: youtubeIcon,
+                category: DEFAULT_CATEGORIES.links,
+                predicate: true,
+                keywords: [
+                  "features",
+                  "tutorials",
+                  "howto",
+                  "help",
+                  "community",
+                ],
+                perform: () => {
+                  window.open(
+                    "https://youtube.com/@excalidraw",
+                    "_blank",
+                    "noopener noreferrer",
+                  );
+                },
+              },
+              ...(isExcalidrawPlusSignedUser
+                ? [
+                    {
+                      ...ExcalidrawPlusAppCommand,
+                      label: "Sign in / Go to Excalidraw+",
+                    },
+                  ]
+                : [ExcalidrawPlusCommand, ExcalidrawPlusAppCommand]),
+
+              {
+                label: t("overwriteConfirm.action.excalidrawPlus.button"),
+                category: DEFAULT_CATEGORIES.export,
+                icon: exportToPlus,
+                predicate: true,
+                keywords: ["plus", "export", "save", "backup"],
+                perform: () => {
+                  if (excalidrawAPI) {
+                    exportToExcalidrawPlus(
+                      excalidrawAPI.getSceneElements(),
+                      excalidrawAPI.getAppState(),
+                      excalidrawAPI.getFiles(),
+                      excalidrawAPI.getName(),
+                    );
+                  }
+                },
+              },
+              {
+                label: t("labels.installPWA"),
+                category: DEFAULT_CATEGORIES.app,
+                predicate: () => !!pwaEvent,
+                perform: () => {
+                  if (pwaEvent) {
+                    pwaEvent.prompt();
+                    pwaEvent.userChoice.then(() => {
+                      // event cannot be reused, but we'll hopefully
+                      // grab new one as the event should be fired again
+                      pwaEvent = null;
+                    });
+                  }
+                },
+              },
+            ]}
+          />
+          {isVisualDebuggerEnabled() && excalidrawAPI && (
+            <DebugCanvas
+              appState={excalidrawAPI.getAppState()}
+              scale={window.devicePixelRatio}
+              ref={debugCanvasRef}
+            />
+          )}
+        </Excalidraw>
+      </div>
     </div>
   );
 };
@@ -1624,7 +2236,10 @@ const ExcalidrawApp = () => {
   return (
     <TopErrorBoundary>
       <Provider store={appJotaiStore}>
-        <ExcalidrawWrapper />
+        <AuthProvider>
+          <ExcalidrawWrapper />
+          <Toaster position="bottom-right" />
+        </AuthProvider>
       </Provider>
     </TopErrorBoundary>
   );

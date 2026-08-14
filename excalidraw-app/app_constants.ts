@@ -19,6 +19,8 @@ export const WS_EVENTS = {
   SERVER: "server-broadcast",
   USER_FOLLOW_CHANGE: "user-follow",
   USER_FOLLOW_ROOM_CHANGE: "user-follow-room-change",
+  // 评论实时同步（阶段 4）：协作房间内转发 CommentEvent
+  COMMENT_EVENT: "comment:event",
 } as const;
 
 export enum WS_SUBTYPES {

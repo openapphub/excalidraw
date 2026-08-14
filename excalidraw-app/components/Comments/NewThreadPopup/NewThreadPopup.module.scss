@@ -1,0 +1,73 @@
+// NewThreadPopup styles
+// Popup for creating a new comment thread
+
+@use "../../../styles/mixins" as *;
+@use "../../../styles/variables" as *;
+
+$popup-width: 320px;
+
+.popup {
+  position: absolute;
+  width: $popup-width;
+  background: var(--island-bg-color, #fff);
+  border: 1px solid var(--island-bg-color, #fff);
+  border-radius: $radius-lg;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 22; // Above ThreadPopup (z-21)
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: $ui-font;
+
+  // Animation
+  animation: popupSlideIn 0.15s ease-out;
+}
+
+@keyframes popupSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.body {
+  padding: $spacing-sm;
+
+  // Override CommentInput styles to make them gray
+  :global {
+    ._inputBox_17h7q_65 {
+      background: var(--default-bg-color, #f8f8f8) !important;
+      border-color: var(--default-bg-color, #f8f8f8) !important;
+    }
+
+    ._toolbar_17h7q_82 {
+      background: var(--default-bg-color, #f8f8f8) !important;
+    }
+  }
+}
+
+// Dark mode
+@include dark-mode {
+  .popup {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--island-bg-color, #232329);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .body {
+    :global {
+      ._inputBox_17h7q_65 {
+        background: var(--default-bg-color, #2d2d33) !important;
+        border-color: var(--default-bg-color, #2d2d33) !important;
+      }
+
+      ._toolbar_17h7q_82 {
+        background: var(--default-bg-color, #2d2d33) !important;
+      }
+    }
+  }
+}

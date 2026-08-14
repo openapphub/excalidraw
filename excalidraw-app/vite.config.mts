@@ -22,7 +22,13 @@ export default defineConfig(({ mode }) => {
           target: "http://localhost:3002",
           changeOrigin: true,
         },
-        "/auth": {
+        // 只代理后端真实的 OIDC 端点：本地 `auth/` 源码目录同名，
+        // 整段 /auth 代理会让 dev server 把模块请求当成 API 转发出去。
+        "/auth/login": {
+          target: "http://localhost:3002",
+          changeOrigin: true,
+        },
+        "/auth/callback": {
           target: "http://localhost:3002",
           changeOrigin: true,
         },
@@ -30,6 +36,15 @@ export default defineConfig(({ mode }) => {
           target: "http://localhost:3002",
           changeOrigin: true,
           ws: true,
+        },
+        // Firebase SDK 改写 host 后打到本机的 Firestore 路径
+        "/google.firestore.v1.Firestore": {
+          target: "http://localhost:3002",
+          changeOrigin: true,
+        },
+        "/v1/projects": {
+          target: "http://localhost:3002",
+          changeOrigin: true,
         },
       },
     },
@@ -163,10 +178,7 @@ export default defineConfig(({ mode }) => {
             "service-worker.js",
             "**/*.chunk-*.js",
           ],
-          navigateFallbackDenylist: [
-            /^\/api/,
-            /^\/auth/,
-          ],
+          navigateFallbackDenylist: [/^\/api/, /^\/auth/],
           runtimeCaching: [
             {
               urlPattern: new RegExp(".+.woff2"),

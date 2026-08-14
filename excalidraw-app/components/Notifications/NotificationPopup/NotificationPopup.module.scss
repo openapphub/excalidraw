@@ -1,0 +1,304 @@
+@use "../../../styles/mixins" as *;
+
+// ============================================================================
+// Popup Container
+// ============================================================================
+
+.popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 320px;
+  max-height: 400px;
+  background: var(--island-bg-color, #fff);
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+// ============================================================================
+// Header
+// ============================================================================
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--default-border-color, #e5e7eb);
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary-color, #1f2937);
+}
+
+.markAllRead {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-primary, #6366f1);
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ============================================================================
+// List
+// ============================================================================
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 280px;
+}
+
+.empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-secondary-color, #6b7280);
+  font-size: 14px;
+}
+
+// ============================================================================
+// Item
+// ============================================================================
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  border-bottom: 1px solid var(--default-border-color, #f3f4f6);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background-color: var(--button-hover-bg, #f9fafb);
+
+    .markReadButton {
+      opacity: 1;
+    }
+  }
+
+  &.read {
+    opacity: 0.7;
+  }
+}
+
+.itemContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+// ============================================================================
+// Avatar
+// ============================================================================
+
+.avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+}
+
+.avatarImage {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatarFallback {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-primary-light, #e0e7ff);
+  color: var(--color-primary, #6366f1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.typeIcon {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--island-bg-color, #fff);
+  border: 1px solid var(--default-border-color, #e5e7eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+// ============================================================================
+// Message
+// ============================================================================
+
+.message {
+  flex: 1;
+  min-width: 0;
+}
+
+.text {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary-color, #1f2937);
+  word-break: break-word;
+
+  strong {
+    font-weight: 600;
+  }
+}
+
+.time {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-secondary-color, #9ca3af);
+}
+
+// ============================================================================
+// Mark Read Button
+// ============================================================================
+
+.markReadButton {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: var(--button-hover-bg, #f3f4f6);
+  color: var(--text-secondary-color, #6b7280);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background-color 0.15s, color 0.15s;
+
+  &:hover {
+    background: var(--color-primary-light, #e0e7ff);
+    color: var(--color-primary, #6366f1);
+  }
+}
+
+// ============================================================================
+// Footer
+// ============================================================================
+
+.footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--default-border-color, #e5e7eb);
+}
+
+.viewAll {
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, transform 0.1s;
+
+  &:hover {
+    background: var(--color-primary-darker, #4f46e5);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+// ============================================================================
+// Dark Mode
+// ============================================================================
+
+@include dark-mode {
+  .popup {
+    background: var(--island-bg-color, #232329);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+
+  .header {
+    border-bottom-color: var(--default-border-color, #3f3f46);
+  }
+
+  .title {
+    color: var(--text-primary-color, #f4f4f5);
+  }
+
+  .item {
+    border-bottom-color: var(--default-border-color, #3f3f46);
+
+    &:hover {
+      background-color: var(--button-hover-bg, #3f3f46);
+    }
+  }
+
+  .avatarFallback {
+    background: var(--color-primary-darker, #4338ca);
+    color: #fff;
+  }
+
+  .typeIcon {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3f3f46);
+  }
+
+  .text {
+    color: var(--text-primary-color, #f4f4f5);
+  }
+
+  .time {
+    color: var(--text-secondary-color, #a1a1aa);
+  }
+
+  .markReadButton {
+    background: var(--button-hover-bg, #3f3f46);
+    color: var(--text-secondary-color, #a1a1aa);
+
+    &:hover {
+      background: var(--color-primary-darker, #4338ca);
+      color: #fff;
+    }
+  }
+
+  .footer {
+    border-top-color: var(--default-border-color, #3f3f46);
+  }
+
+  .empty {
+    color: var(--text-secondary-color, #a1a1aa);
+  }
+}

@@ -1,0 +1,236 @@
+// MentionInput styles
+// Rich text editor with @mention autocomplete
+// Note: Border is handled by parent inputBox
+
+@use "../../../styles/mixins" as *;
+@use "../../../styles/variables" as *;
+
+.container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  background: transparent;
+  box-sizing: border-box;
+  text-align: left; // Ensure text alignment is left
+}
+
+// Contenteditable editor (replaces textarea)
+.editor {
+  position: relative;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+  height: auto !important;
+  min-height: 53px !important; // Comfortable initial height, auto-adjusts when typing
+  max-height: 120px;
+  padding: 6px 8px;
+  margin: 0 !important;
+  border: none !important;
+  font-size: 14px !important;
+  font-family: $ui-font;
+  line-height: 1.5 !important; // 14px * 1.5 = 21px
+  text-align: left !important;
+  direction: ltr !important;
+  background: transparent !important;
+  color: var(--color-text-primary, #333);
+  overflow-y: auto;
+  overflow-x: hidden !important;
+  word-wrap: break-word !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+  box-sizing: border-box !important;
+  outline: none !important;
+
+  // Prevent browser from adding extra space in empty state
+  &:empty::after {
+    content: "\200B"; // Zero-width space to prevent empty contenteditable height issues
+    display: inline;
+  }
+
+  &:empty:focus {
+    text-align: left !important;
+  }
+
+  &:focus {
+    outline: none !important;
+  }
+
+  &[aria-disabled="true"] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  // Placeholder - completely separate from layout flow
+  &.empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-tertiary, #999);
+    pointer-events: none;
+    position: absolute;
+    display: none; // TEMPORARILY HIDDEN FOR DEBUGGING
+    top: 0;
+    left: 0;
+    padding: 6px 8px; // Same as editor padding
+    font-size: 14px;
+    line-height: 1.5;
+    font-family: $ui-font;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+// Mention chip styling (global because it's in contenteditable)
+:global(.mention-chip) {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  margin: 0 2px;
+  background: var(--color-primary-light, #e8e7f8);
+  color: var(--color-primary, #6965db);
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: $ui-font;
+  line-height: 1.4;
+  white-space: nowrap;
+  user-select: all; // Select entire chip when clicked
+  cursor: default;
+
+  &::before {
+    content: "@";
+    opacity: 0.7;
+    margin-right: 1px;
+  }
+}
+
+// Dropdown for @mention suggestions
+.dropdown {
+  position: fixed;
+  width: 280px;
+  background: var(--color-surface-low, #fff);
+  border: 1px solid var(--color-border, #e5e5e5);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+
+  @include custom-scrollbar;
+}
+
+.loading,
+.empty {
+  padding: $spacing-md;
+  text-align: center;
+  color: var(--color-text-tertiary, #999);
+  font-size: 13px;
+}
+
+.memberItem {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  width: 100%;
+  padding: $spacing-sm $spacing-md;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease;
+
+  &:hover,
+  &.selected {
+    background: var(--color-surface-high, #f0f0f0);
+  }
+}
+
+.memberAvatar,
+.memberAvatarFallback {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.memberAvatar {
+  object-fit: cover;
+}
+
+.memberAvatarFallback {
+  background: var(--color-primary-light, #e8e7f8);
+  color: var(--color-primary, #6965db);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: $ui-font;
+}
+
+.memberInfo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.memberName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary, #333);
+
+  @include truncate;
+}
+
+.memberEmail {
+  font-size: 11px;
+  color: var(--color-text-tertiary, #999);
+
+  @include truncate;
+}
+
+// Dark mode
+@include dark-mode {
+  .editor {
+    color: var(--color-text-primary-dark, #fff);
+  }
+
+  .editor.empty::before {
+    color: var(--color-text-tertiary-dark, #888);
+  }
+
+  :global(.mention-chip) {
+    background: var(--color-primary-darker, #4a47a3);
+    color: var(--color-primary-light, #c4c1ff);
+  }
+
+  .dropdown {
+    background: var(--color-surface-high, #3d3d42);
+    border-color: var(--color-border-dark, #555);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  .loading,
+  .empty {
+    color: var(--color-text-tertiary-dark, #888);
+  }
+
+  .memberItem {
+    &:hover,
+    &.selected {
+      background: var(--color-surface-higher, #4a4a4f);
+    }
+  }
+
+  .memberAvatarFallback {
+    background: var(--color-primary-darker, #4a47a3);
+    color: var(--color-primary-light, #e8e7f8);
+  }
+
+  .memberName {
+    color: var(--color-text-primary-dark, #fff);
+  }
+
+  .memberEmail {
+    color: var(--color-text-tertiary-dark, #888);
+  }
+}

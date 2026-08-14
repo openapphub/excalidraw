@@ -1,0 +1,611 @@
+// =============================================================================
+// MembersPage - CSS Module
+// =============================================================================
+@use "../../../styles/mixins" as *;
+
+.page {
+  // Define --ui-font locally since component is outside .excalidraw container
+  --ui-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, Segoe UI,
+    Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--ui-font);
+
+  flex: 1;
+  padding: 32px 48px;
+  overflow-y: auto;
+  background: var(--default-bg-color, #fafafa);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.headerText {
+  flex: 1;
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 25px;
+  font-weight: 500;
+  color: var(--text-primary-color, #1b1b1f);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary-color, #6b6b6b);
+}
+
+.separator {
+  height: 1px;
+  background: var(--default-border-color, #e5e5e5);
+  margin: 24px 0 32px;
+}
+
+.inviteButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--color-primary, #6965db);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--color-primary-darker, #5b57c5);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+// Messages
+.success {
+  padding: 12px 16px;
+  background: rgba(5, 150, 105, 0.1);
+  border: 1px solid var(--color-success, #059669);
+  border-radius: 8px;
+  color: var(--color-success, #059669);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.errorInline {
+  padding: 12px 16px;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid var(--color-danger, #dc2626);
+  border-radius: 8px;
+  color: var(--color-danger, #dc2626);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+// Search
+.search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--island-bg-color, #ffffff);
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  border-radius: 8px;
+  margin-bottom: 16px;
+
+  svg {
+    width: 20px;
+    height: 20px;
+    color: var(--text-secondary-color, #6b6b6b);
+    flex-shrink: 0;
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 15px;
+    color: var(--text-primary-color, #1b1b1f);
+    outline: none;
+
+    &::placeholder {
+      color: var(--text-secondary-color, #6b6b6b);
+    }
+  }
+}
+
+// Loading
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--default-border-color, #e5e5e5);
+  border-top-color: var(--color-primary, #6965db);
+  border-radius: 50%;
+  animation: membersSpin 1s linear infinite;
+}
+
+@keyframes membersSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Empty states
+.empty,
+.emptyList {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary-color, #6b6b6b);
+}
+
+// Members list
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.member {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--island-bg-color, #ffffff);
+  border-radius: 8px;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--default-border-color, #e5e5e5);
+  }
+
+  &:hover .memberRemove {
+    opacity: 1;
+  }
+}
+
+.memberAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.memberInitials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.memberInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.memberName {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary-color, #1b1b1f);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.memberEmail {
+  font-size: 13px;
+  color: var(--text-secondary-color, #6b6b6b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.memberRole {
+  flex-shrink: 0;
+}
+
+.roleBadge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 12px;
+}
+
+.roleBadgeAdmin {
+  composes: roleBadge;
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.1);
+}
+
+.roleBadgeMember {
+  composes: roleBadge;
+  color: var(--color-primary, #6965db);
+  background: rgba(105, 101, 219, 0.1);
+}
+
+.roleBadgeViewer {
+  composes: roleBadge;
+  color: var(--text-secondary-color, #6b7280);
+  background: rgba(107, 114, 128, 0.1);
+}
+
+.roleSelect {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.roleSelectMember {
+  composes: roleSelect;
+  color: var(--color-primary, #6965db);
+  background: rgba(105, 101, 219, 0.1);
+}
+
+.roleSelectViewer {
+  composes: roleSelect;
+  color: var(--text-secondary-color, #6b7280);
+  background: rgba(107, 114, 128, 0.1);
+}
+
+.memberRemove {
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary-color, #6b6b6b);
+  opacity: 0;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(220, 38, 38, 0.1);
+    color: var(--color-danger, #dc2626);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+// Dialog
+.dialogOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.dialog {
+  background: var(--island-bg-color, #ffffff);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--default-border-color, #e5e5e5);
+
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary-color, #1b1b1f);
+    margin: 0;
+  }
+}
+
+.dialogClose {
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary-color, #6b6b6b);
+
+  &:hover {
+    background: var(--default-border-color, #e5e5e5);
+    color: var(--text-primary-color, #1b1b1f);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.dialogContent {
+  padding: 24px;
+
+  > p {
+    font-size: 14px;
+    color: var(--text-secondary-color, #6b6b6b);
+    margin: 0 0 20px;
+  }
+}
+
+.formGroup {
+  margin-bottom: 20px;
+
+  label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary-color, #1b1b1f);
+    margin-bottom: 8px;
+  }
+}
+
+.select {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--island-bg-color, #ffffff);
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  border-radius: 8px;
+  font-size: 15px;
+  color: var(--text-primary-color, #1b1b1f);
+  cursor: pointer;
+  outline: none;
+
+  &:focus {
+    border-color: var(--color-primary, #6965db);
+  }
+}
+
+.inviteLink {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  input {
+    flex: 1;
+    padding: 12px 16px;
+    background: var(--island-bg-color, #ffffff);
+    border: 1px solid var(--default-border-color, #e5e5e5);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: ui-monospace, monospace;
+    color: var(--text-primary-color, #1b1b1f);
+    outline: none;
+  }
+}
+
+.copyButton {
+  padding: 12px;
+  background: var(--color-primary, #6965db);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--color-primary-darker, #5b57c5);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.inviteHint {
+  font-size: 13px;
+  color: var(--text-secondary-color, #6b6b6b);
+  margin: 0;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  width: 100%;
+}
+
+.buttonPrimary {
+  composes: button;
+  background: var(--color-primary, #6965db);
+  color: white;
+
+  &:hover {
+    background: var(--color-primary-darker, #5b57c5);
+  }
+}
+
+// Dark mode
+@include dark-mode {
+  .page {
+    background: var(--default-bg-color, #1e1e24);
+  }
+
+  .title {
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .separator {
+    background: var(--default-border-color, #3d3d3d);
+  }
+
+  .subtitle {
+    color: var(--text-secondary-color, #9b9b9b);
+  }
+
+  .spinner {
+    border-color: var(--default-border-color, #3d3d3d);
+    border-top-color: var(--color-primary, #a5a1ff);
+  }
+
+  .search {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d3d);
+
+    input {
+      color: var(--text-primary-color, #e1e1e1);
+
+      &::placeholder {
+        color: var(--text-secondary-color, #9b9b9b);
+      }
+    }
+  }
+
+  .member {
+    background: var(--island-bg-color, #232329);
+
+    &:hover {
+      background: var(--default-border-color, #3d3d3d);
+    }
+  }
+
+  .memberName {
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .memberEmail {
+    color: var(--text-secondary-color, #9b9b9b);
+  }
+
+  .dialog {
+    background: var(--island-bg-color, #232329);
+  }
+
+  .dialogHeader {
+    border-color: var(--default-border-color, #3d3d3d);
+
+    h2 {
+      color: var(--text-primary-color, #e1e1e1);
+    }
+  }
+
+  .dialogClose {
+    color: var(--text-secondary-color, #9b9b9b);
+
+    &:hover {
+      background: var(--default-border-color, #3d3d3d);
+      color: var(--text-primary-color, #e1e1e1);
+    }
+  }
+
+  .dialogContent > p {
+    color: var(--text-secondary-color, #9b9b9b);
+  }
+
+  .formGroup label {
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .select {
+    background: var(--default-bg-color, #1e1e24);
+    border-color: var(--default-border-color, #3d3d3d);
+    color: var(--text-primary-color, #e1e1e1);
+
+    option {
+      background: var(--island-bg-color, #232329);
+      color: var(--text-primary-color, #e1e1e1);
+    }
+  }
+
+  .inviteLink input {
+    background: var(--default-bg-color, #1e1e24);
+    border-color: var(--default-border-color, #3d3d3d);
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .inviteHint {
+    color: var(--text-secondary-color, #9b9b9b);
+  }
+
+  .roleBadgeAdmin {
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.15);
+  }
+
+  .roleBadgeMember {
+    color: #a5a1ff;
+    background: rgba(165, 161, 255, 0.15);
+  }
+}
+
+// Responsive
+@media (max-width: 640px) {
+  .page {
+    padding: 24px 16px;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .inviteButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .member {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .memberInfo {
+    flex: 1 1 calc(100% - 56px);
+  }
+
+  .memberRole {
+    order: 3;
+    margin-left: 56px;
+  }
+
+  .memberRemove {
+    opacity: 1;
+  }
+}

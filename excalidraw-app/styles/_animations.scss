@@ -1,0 +1,122 @@
+// =============================================================================
+// AstraDraw Shared Animations
+// =============================================================================
+// Reusable keyframe animations for CSS Modules.
+// Import with: @use "../../styles/animations" as *;
+
+// -----------------------------------------------------------------------------
+// Shimmer Animation (for loading skeletons)
+// -----------------------------------------------------------------------------
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@mixin shimmer-bg($light-color: #f0f0f0, $dark-color: #e0e0e0) {
+  background: linear-gradient(
+    90deg,
+    $light-color 25%,
+    $dark-color 50%,
+    $light-color 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+// Dark mode shimmer
+@mixin shimmer-bg-dark {
+  background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
+  background-size: 200% 100%;
+}
+
+// -----------------------------------------------------------------------------
+// Fade Animations
+// -----------------------------------------------------------------------------
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@mixin fade-in($duration: 0.2s) {
+  animation: fadeIn $duration ease-out;
+}
+
+// -----------------------------------------------------------------------------
+// Slide Animations
+// -----------------------------------------------------------------------------
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Spin Animation (for loading spinners)
+// -----------------------------------------------------------------------------
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@mixin spin($duration: 1s) {
+  animation: spin $duration linear infinite;
+}
+
+// -----------------------------------------------------------------------------
+// Pulse Animation
+// -----------------------------------------------------------------------------
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@mixin pulse($duration: 2s) {
+  animation: pulse $duration ease-in-out infinite;
+}

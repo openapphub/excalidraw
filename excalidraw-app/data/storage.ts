@@ -127,8 +127,24 @@ export interface IStorageAdapter {
  * like Map are correctly instantiated.
  * @param data The raw data from the API.
  */
+const emptyCanvasData = (): CanvasData =>
+  ({
+    elements: [],
+    appState: { collaborators: new Map() } as AppState,
+    files: {},
+  }) as CanvasData;
+
 export const hydrateCanvasData = (data: any): CanvasData => {
+  if (!data || typeof data !== "object") {
+    return emptyCanvasData();
+  }
   const canvasData: CanvasData = { ...data };
+  if (!Array.isArray(canvasData.elements)) {
+    canvasData.elements = [];
+  }
+  if (!canvasData.files) {
+    canvasData.files = {};
+  }
 
   // Ensure collaborators is a Map, not an object.
   if (
@@ -144,6 +160,8 @@ export const hydrateCanvasData = (data: any): CanvasData => {
   } else if (canvasData.appState && !canvasData.appState.collaborators) {
     // Ensure collaborators is at least an empty Map if it's missing.
     canvasData.appState.collaborators = new Map();
+  } else if (!canvasData.appState) {
+    canvasData.appState = { collaborators: new Map() } as AppState;
   }
 
   return canvasData;

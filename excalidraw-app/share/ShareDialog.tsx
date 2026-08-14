@@ -18,8 +18,17 @@ import { useI18n } from "@excalidraw/excalidraw/i18n";
 import { KEYS, getFrame } from "@excalidraw/common";
 import { useEffect, useRef, useState } from "react";
 
-import { atom, useAtom, useAtomValue } from "../app-jotai";
+import { atom, useAtom, useAtomValue, useSetAtom } from "../app-jotai";
 import { activeRoomLinkAtom } from "../collab/Collab";
+import {
+  startCollaboration as startSceneCollabRoom,
+  enableSceneCollab,
+  disableSceneCollab,
+} from "../auth/workspaceApi";
+import {
+  currentSceneIdAtom,
+  sceneCollabEnabledAtom,
+} from "../components/Settings/settingsState";
 
 import "./ShareDialog.scss";
 import { QRCode } from "./QRCode";
@@ -64,6 +73,8 @@ const ActiveRoomDialog = ({
   handleClose: () => void;
 }) => {
   const { t } = useI18n();
+  const currentSceneId = useAtomValue(currentSceneIdAtom);
+  const setSceneCollabEnabled = useSetAtom(sceneCollabEnabledAtom);
   const [, setJustCopied] = useState(false);
   const timerRef = useRef<number>(0);
   const ref = useRef<HTMLInputElement>(null);
@@ -165,8 +176,20 @@ const ActiveRoomDialog = ({
           color="danger"
           label={t("roomDialog.button_stopSession")}
           icon={playerStopFilledIcon}
-          onClick={() => {
+          onClick={async () => {
             trackEvent("share", "room closed");
+            const sceneId = currentSceneId;
+            if (sceneId && collabAPI.getRoomId() === sceneId) {
+              try {
+                await disableSceneCollab(sceneId);
+              } catch (error) {
+                console.error(error);
+              }
+              setSceneCollabEnabled(false);
+              collabAPI.stopCollaboration(false);
+              handleClose();
+              return;
+            }
             collabAPI.stopCollaboration();
             if (!collabAPI.isCollaborating()) {
               handleClose();
@@ -180,31 +203,88 @@ const ActiveRoomDialog = ({
 
 const ShareDialogPicker = (props: ShareDialogProps) => {
   const { t } = useI18n();
+  const currentSceneId = useAtomValue(currentSceneIdAtom);
+  const setSceneCollabEnabled = useSetAtom(sceneCollabEnabledAtom);
 
   const { collabAPI } = props;
+
+  const startWorkspaceCollab = async () => {
+    if (!collabAPI || !currentSceneId) {
+      return;
+    }
+    trackEvent("share", "workspace collab", `ui (${getFrame()})`);
+    try {
+      await enableSceneCollab(currentSceneId);
+      setSceneCollabEnabled(true);
+      const { roomId, roomKey } = await startSceneCollabRoom(currentSceneId);
+      await collabAPI.startCollaboration({
+        roomId,
+        roomKey,
+        isAutoCollab: true,
+      });
+    } catch (error) {
+      console.error("Failed to enable workspace collaboration:", error);
+      setSceneCollabEnabled(false);
+    }
+  };
 
   const startCollabJSX = collabAPI ? (
     <>
       <div className="ShareDialog__picker__header">
-        {t("labels.liveCollaboration").replace(/\./g, "")}
+        {currentSceneId ? "允许一起编辑" : t("labels.liveCollaboration").replace(/\./g, "")}
       </div>
 
       <div className="ShareDialog__picker__description">
-        <div style={{ marginBottom: "1em" }}>{t("roomDialog.desc_intro")}</div>
-        {t("roomDialog.desc_privacy")}
+        {currentSceneId ? (
+          <div>
+            解锁这条工作区画布，把地址栏里的 Scene 链接发给已加入的同事，大家可以一起改、写进数据库。
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: "1em" }}>{t("roomDialog.desc_intro")}</div>
+            {t("roomDialog.desc_privacy")}
+          </>
+        )}
       </div>
 
       <div className="ShareDialog__picker__button">
         <FilledButton
           size="large"
-          label={t("roomDialog.button_startSession")}
+          label={currentSceneId ? "允许一起编辑" : t("roomDialog.button_startSession")}
           icon={playerPlayIcon}
           onClick={() => {
+            if (currentSceneId) {
+              void startWorkspaceCollab();
+              return;
+            }
             trackEvent("share", "room creation", `ui (${getFrame()})`);
             collabAPI.startCollaboration(null);
           }}
         />
       </div>
+
+      {currentSceneId && (
+        <>
+          <div className="ShareDialog__separator">
+            <span>{t("shareDialog.or")}</span>
+          </div>
+          <div className="ShareDialog__picker__description">
+            临时房间（不写工作区、关掉后不在列表里）
+          </div>
+          <div className="ShareDialog__picker__button">
+            <FilledButton
+              size="large"
+              variant="outlined"
+              label="开始临时房间"
+              icon={playerPlayIcon}
+              onClick={() => {
+                trackEvent("share", "room creation", `ui (${getFrame()})`);
+                collabAPI.startCollaboration(null);
+              }}
+            />
+          </div>
+        </>
+      )}
 
       {props.type === "share" && (
         <div className="ShareDialog__separator">

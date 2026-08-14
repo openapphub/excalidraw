@@ -30,9 +30,7 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
 
   async saveCanvas(id: string, data: CanvasData): Promise<void> {
     const existingMetadata = await get<CanvasMetadata>(id, metadataStore);
-    if (!existingMetadata) {
-      throw new Error("Canvas metadata not found. Cannot save.");
-    }
+    const now = new Date().toISOString();
     const thumbnail = await generateThumbnail(
       data.elements,
       data.appState,
@@ -40,13 +38,14 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
     );
 
     const updatedMetadata: CanvasMetadata = {
-      ...existingMetadata,
-      name: data.appState.name || existingMetadata.name,
-      updatedAt: new Date().toISOString(),
+      id,
+      name: data.appState.name || existingMetadata?.name || "Untitled Canvas",
+      createdAt: existingMetadata?.createdAt || now,
+      updatedAt: now,
       thumbnail: data.elements.length > 0 ? thumbnail : undefined,
-      // 兼容历史数据没有 workspaceId 的情况。
+      // 兼容历史数据没有 workspaceId 的情况；无 metadata 时按给定 id upsert。
       workspaceId:
-        existingMetadata.workspaceId ||
+        existingMetadata?.workspaceId ||
         (data.appState as { workspaceId?: string }).workspaceId ||
         "default",
     };

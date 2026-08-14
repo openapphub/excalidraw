@@ -82,6 +82,46 @@
   }
 }
 
+// Workspace shell 布局：侧栏与主内容区并排，侧栏展开时挤压主内容（同 AstraDraw）
+.excalidraw-app {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+
+  // 允许滚动但阻止 UI 区域的双指缩放（画布自身已设置 touch-action: none）
+  touch-action: pan-x pan-y;
+
+  &__main {
+    flex: 1;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    transition: margin-left 0.2s ease-out;
+  }
+
+  // 显隐由 aria-hidden 驱动，避免 display:none 打断 Excalidraw 的尺寸测量
+  &__dashboard[aria-hidden="true"] {
+    display: none !important;
+  }
+
+  &__dashboard[aria-hidden="false"] {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  &__canvas {
+    position: relative;
+  }
+
+  &__canvas[aria-hidden="true"] {
+    pointer-events: none;
+  }
+}
+
 .plus-button {
   display: flex;
   justify-content: center;

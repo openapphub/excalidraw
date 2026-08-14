@@ -2755,27 +2755,16 @@ class App extends React.Component<AppProps, AppState> {
     frameElement: ExcalidrawIframeElement;
     data: MagicGenerationData;
   }) => {
-    if (data.status === "pending") {
-      // We don't wanna persist pending state to storage. It should be in-app
-      // state only.
-      // Thus reset so that we prefer local cache (if there was some
-      // generationData set previously)
-      this.scene.mutateElement(
-        frameElement,
-        {
-          customData: { generationData: undefined },
-        },
-        { informMutation: false, isDragging: false },
-      );
-    } else {
-      this.scene.mutateElement(
-        frameElement,
-        {
-          customData: { generationData: data },
-        },
-        { informMutation: false, isDragging: false },
-      );
-    }
+    // pending 也写入元素并通知 scene：协作对方才能看到转圈，而不是
+    // 「Error! No generation data」。done/error 必须 informMutation，否则
+    // 生成结果只存在本机 magicGenerations Map，不会走 onChange → 协作广播。
+    this.scene.mutateElement(
+      frameElement,
+      {
+        customData: { generationData: data },
+      },
+      { informMutation: true, isDragging: false },
+    );
     this.magicGenerations.set(frameElement.id, data);
     this.triggerRender();
   };

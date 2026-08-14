@@ -53,6 +53,7 @@ import type {
   UserToFollow,
 } from "@excalidraw/excalidraw/types";
 import type { Mutable, ValueOf } from "@excalidraw/common/utility-types";
+import type { Socket } from "socket.io-client";
 
 import { appJotaiStore, atom } from "../app-jotai";
 import {
@@ -101,6 +102,8 @@ import type {
 export const collabAPIAtom = atom<CollabAPI | null>(null);
 export const isCollaboratingAtom = atom(false);
 export const isOfflineAtom = atom(false);
+/** 协作 socket 就绪后写入，评论实时同步从这里取，避免 getSocket() 时组件不重渲染。 */
+export const collabSocketAtom = atom<Socket | null>(null);
 
 interface CollabState {
   errorMessage: string | null;
@@ -118,6 +121,9 @@ type CollabInstance = InstanceType<typeof Collab>;
 export interface CollabAPI {
   /** function so that we can access the latest value from stale callbacks */
   isCollaborating: () => boolean;
+  getRoomId: () => string | null;
+  /** 协作中只让房间内 socket id 最小的一侧写 SQLite，避免全员 5 秒整份 PUT。 */
+  shouldPersistCanvas: () => boolean;
   onPointerUpdate: CollabInstance["onPointerUpdate"];
   startCollaboration: CollabInstance["startCollaboration"];
   stopCollaboration: CollabInstance["stopCollaboration"];
@@ -146,6 +152,10 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   private socketInitializationTimer?: number;
   private lastBroadcastedOrReceivedSceneVersion: number = -1;
   private isReplacingScene = false;
+  /** 工作区 scene 自动协作：进房时保留当前画布，空房间用 SQLite 内容播种。 */
+  private isAutoCollabJoin = false;
+  /** 防止自动进房 effect / StrictMode 对同一房间并行 startCollaboration。 */
+  private startCollabLock: Promise<void> | null = null;
   private collaborators = new Map<SocketId, Collaborator>();
   /** the socket ids of the users following the current user */
   private followedBy = new Set<SocketId>();
@@ -241,6 +251,8 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
     const collabAPI: CollabAPI = {
       isCollaborating: this.isCollaborating,
+      getRoomId: this.getRoomId,
+      shouldPersistCanvas: this.shouldPersistCanvas,
       onPointerUpdate: this.onPointerUpdate,
       startCollaboration: this.startCollaboration,
       saveCollaboration: this.saveCollaboration,
@@ -302,6 +314,8 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   }
 
   isCollaborating = () => appJotaiStore.get(isCollaboratingAtom)!;
+
+  getRoomId = () => this.portal.roomId;
 
   private setIsCollaborating = (isCollaborating: boolean) => {
     appJotaiStore.set(isCollaboratingAtom, isCollaborating);
@@ -485,6 +499,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
   private destroySocketClient = (opts?: { isUnload: boolean }) => {
     this.lastBroadcastedOrReceivedSceneVersion = -1;
+    appJotaiStore.set(collabSocketAtom, null);
     this.portal.close();
     this.fileManager.reset();
     this.followedBy = new Set();
@@ -552,7 +567,9 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   private fallbackInitializationHandler: null | (() => any) = null;
 
   startCollaboration = async (
-    existingRoomLinkData: null | { roomId: string; roomKey: string },
+    existingRoomLinkData:
+      | null
+      | { roomId: string; roomKey: string; isAutoCollab?: boolean },
   ) => {
     if (!this.state.username) {
       import("@excalidraw/random-username").then(({ getRandomUsername }) => {
@@ -561,8 +578,55 @@ class Collab extends PureComponent<CollabProps, CollabState> {
       });
     }
 
-    if (this.portal.socket) {
+    const isAutoCollab = Boolean(existingRoomLinkData?.isAutoCollab);
+    this.isAutoCollabJoin = isAutoCollab;
+
+    if (
+      this.portal.socket &&
+      existingRoomLinkData &&
+      this.portal.roomId === existingRoomLinkData.roomId
+    ) {
       return null;
+    }
+
+    if (this.startCollabLock) {
+      await this.startCollabLock;
+      if (
+        this.portal.socket &&
+        existingRoomLinkData &&
+        this.portal.roomId === existingRoomLinkData.roomId
+      ) {
+        return null;
+      }
+    }
+
+    let releaseStartLock = () => {};
+    this.startCollabLock = new Promise<void>((resolve) => {
+      releaseStartLock = resolve;
+    });
+
+    try {
+      return await this.openCollaborationSocket(
+        existingRoomLinkData,
+        isAutoCollab,
+      );
+    } finally {
+      releaseStartLock();
+      this.startCollabLock = null;
+    }
+  };
+
+  private openCollaborationSocket = async (
+    existingRoomLinkData:
+      | null
+      | { roomId: string; roomKey: string; isAutoCollab?: boolean },
+    isAutoCollab: boolean,
+  ) => {
+    if (this.portal.socket) {
+      this.queueBroadcastAllElements.cancel();
+      this.queueSaveToFirebase.cancel();
+      this.loadImageFiles.cancel();
+      this.destroySocketClient();
     }
 
     let roomId;
@@ -606,10 +670,17 @@ class Collab extends PureComponent<CollabProps, CollabState> {
       this.portal.socket = this.portal.open(
         socketIOClient(import.meta.env.VITE_APP_WS_SERVER_URL, {
           transports: ["websocket", "polling"],
-        }),
+          // 与 Go setupSocketIO 的 5MB 对齐；线框图至代码 HTML 进 customData 后
+          // 单帧可能超过客户端默认。socket.io-client 4.7 类型未暴露该字段。
+          maxHttpBufferSize: 5_000_000,
+        } as Parameters<typeof socketIOClient>[1]),
         roomId,
         roomKey,
       );
+      appJotaiStore.set(collabSocketAtom, this.portal.socket);
+      if (isAutoCollab) {
+        this.portal.broadcastBeforeInit = true;
+      }
 
       this.portal.socket.once("connect_error", fallbackInitializationHandler);
     } catch (error: any) {
@@ -619,8 +690,11 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     }
 
     if (existingRoomLinkData) {
-      // when joining existing room, don't merge it with current scene data
-      this.excalidrawAPI.resetScene();
+      // 官方 #room= 进房会清空当前画布再拉 Firebase。
+      // 工作区 scene 自动协作必须保留已从 SQLite 载入的内容，空房间再用它播种。
+      if (!isAutoCollab) {
+        this.excalidrawAPI.resetScene();
+      }
     } else {
       const elements = this.excalidrawAPI.getSceneElements().map((element) => {
         if (isImageElement(element) && element.status === "saved") {
@@ -804,7 +878,20 @@ class Collab extends PureComponent<CollabProps, CollabState> {
       );
     }
     if (fetchScene && roomLinkData && this.portal.socket) {
-      this.excalidrawAPI.resetScene();
+      const keepScene = this.isAutoCollabJoin;
+      if (keepScene) {
+        // 工作区自动协作：画布已从 SQLite 载入。立刻允许 WS 广播，
+        // 不要等 Firebase getDoc/transaction（失败或挂起时对方只能刷新才能看到）。
+        this.portal.socketInitialized = true;
+        void this.portal.broadcastScene(
+          WS_SUBTYPES.UPDATE,
+          this.excalidrawAPI.getSceneElementsIncludingDeleted(),
+          true,
+        );
+      }
+      if (!keepScene) {
+        this.excalidrawAPI.resetScene();
+      }
 
       try {
         const elements = await loadFromFirebase(
@@ -812,7 +899,18 @@ class Collab extends PureComponent<CollabProps, CollabState> {
           roomLinkData.roomKey,
           this.portal.socket,
         );
-        if (elements) {
+        if (elements && elements.length > 0) {
+          if (keepScene) {
+            const reconciledElements = this._reconcileElements(
+              toBrandedType<readonly RemoteExcalidrawElement[]>(elements),
+              { bumpVersions: true },
+            );
+            this.handleRemoteSceneUpdate(reconciledElements);
+            return {
+              elements: reconciledElements,
+              scrollToContent: false,
+            };
+          }
           this.setLastBroadcastedOrReceivedSceneVersion(
             getSceneVersion(elements),
           );
@@ -821,6 +919,14 @@ class Collab extends PureComponent<CollabProps, CollabState> {
             elements,
             scrollToContent: true,
           };
+        }
+        if (keepScene) {
+          const current = getSyncableElements(
+            this.excalidrawAPI.getSceneElementsIncludingDeleted(),
+          );
+          if (current.length > 0) {
+            void this.saveCollabRoomToFirebase(current);
+          }
         }
       } catch (error: any) {
         // log the error and move on. other peers will sync us the scene.
@@ -836,6 +942,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
   private _reconcileElements = (
     remoteElements: readonly RemoteExcalidrawElement[],
+    opts?: { bumpVersions?: boolean },
   ): ReconciledExcalidrawElement[] => {
     const appState = this.excalidrawAPI.getAppState();
 
@@ -852,10 +959,15 @@ class Collab extends PureComponent<CollabProps, CollabState> {
       appState,
     );
 
-    reconciledElements = bumpElementVersions(
-      reconciledElements,
-      existingElements,
-    );
+    // bump 只用于工作区自动协作进房：SQLite 本地画布和 Firebase 房间可能同
+    // version、不同 nonce。常规 SCENE_UPDATE 不能 bump，否则先在房间里的人
+    // 会把后来者的改动判成旧版本，表现为「A 改 B 立刻看到，B 改 A 很慢」。
+    if (opts?.bumpVersions) {
+      reconciledElements = bumpElementVersions(
+        reconciledElements,
+        existingElements,
+      );
+    }
 
     // Avoid broadcasting to the rest of the collaborators the scene
     // we just received!
@@ -1062,15 +1174,47 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     this.portal.broadcastIdleChange(userState);
   };
 
+  shouldPersistCanvas = () => {
+    if (!this.isCollaborating()) {
+      return true;
+    }
+    const ids = Array.from(this.collaborators.keys()).sort();
+    const mine = this.portal.socket?.id;
+    if (!mine || ids.length === 0) {
+      return true;
+    }
+    return ids[0] === mine;
+  };
+
+  private hasRemoteCollaborators = () => {
+    for (const collaborator of this.collaborators.values()) {
+      if (!collaborator.isCurrentUser) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   broadcastElements = (elements: readonly OrderedExcalidrawElement[]) => {
+    if (!this.hasRemoteCollaborators()) {
+      const version = getSceneVersion(elements);
+      if (version > this.getLastBroadcastedOrReceivedSceneVersion()) {
+        this.lastBroadcastedOrReceivedSceneVersion = version;
+      }
+      return;
+    }
+
     if (
       getSceneVersion(elements) >
       this.getLastBroadcastedOrReceivedSceneVersion()
     ) {
       this.portal.broadcastScene(WS_SUBTYPES.UPDATE, elements, false);
       this.lastBroadcastedOrReceivedSceneVersion = getSceneVersion(elements);
-      this.queueBroadcastAllElements();
+      this.queueBroadcastAllElements.cancel();
     }
+
+    // 增量可能丢包；节流全量补发，避免后加入的一侧长时间看不到对方改动。
+    this.queueBroadcastAllElements();
   };
 
   syncElements = (elements: readonly OrderedExcalidrawElement[]) => {
@@ -1082,6 +1226,9 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   };
 
   queueBroadcastAllElements = throttle(() => {
+    if (!this.hasRemoteCollaborators()) {
+      return;
+    }
     this.portal.broadcastScene(
       WS_SUBTYPES.UPDATE,
       this.excalidrawAPI.getSceneElementsIncludingDeleted(),
@@ -1097,7 +1244,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
   queueSaveToFirebase = throttle(
     () => {
-      if (this.portal.socketInitialized) {
+      if (this.portal.socketInitialized && this.hasRemoteCollaborators()) {
         this.saveCollabRoomToFirebase(
           getSyncableElements(
             this.excalidrawAPI.getSceneElementsIncludingDeleted(),

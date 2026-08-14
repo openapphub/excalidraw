@@ -1,0 +1,76 @@
+// CommentCreationOverlay styles
+// Full-screen overlay for click-to-create comment mode
+
+@use "../../../styles/mixins" as *;
+@use "../../../styles/variables" as *;
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10; // Above canvas and markers, below modals
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%236965db' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3Cline x1='12' y1='8' x2='12' y2='12'%3E%3C/line%3E%3Cline x1='10' y1='10' x2='14' y2='10'%3E%3C/line%3E%3C/svg%3E")
+      12 12,
+    crosshair;
+
+  // Subtle tint to indicate mode is active
+  background: rgba(105, 101, 219, 0.02);
+
+  // Animation
+  animation: overlayFadeIn 0.15s ease-out;
+}
+
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.hint {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: $spacing-sm $spacing-md;
+  background: var(--island-bg-color, #fff);
+  border-radius: $radius-lg;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-family: $ui-font;
+  font-size: 13px;
+  color: var(--text-primary-color, #1b1b1f);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+
+  // Animation
+  animation: hintSlideUp 0.2s ease-out;
+}
+
+@keyframes hintSlideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+// Dark mode
+@include dark-mode {
+  .overlay {
+    background: rgba(105, 101, 219, 0.03);
+  }
+
+  .hint {
+    background: var(--island-bg-color, #232329);
+    color: var(--text-primary-color, #e1e1e1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+}

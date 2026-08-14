@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
 import { restoreAppState } from "@excalidraw/excalidraw/data/restore";
@@ -6,8 +6,16 @@ import { restoreAppState } from "@excalidraw/excalidraw/data/restore";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { AuthError } from "../data/storageAdapters/BackendStorageAdapter";
+import { isBackendPersistableCanvasId } from "../data/canvasId";
+import { getScene } from "../auth/workspaceApi";
+import {
+  currentSceneCanEditAtom,
+  currentSceneIdAtom,
+  sceneCollabEnabledAtom,
+  sceneEditLockAtom,
+} from "../components/Settings/settingsState";
 
-import { useAtom, currentCanvasIdAtom } from "../app-jotai";
+import { useAtom, currentCanvasIdAtom, useSetAtom } from "../app-jotai";
 
 import { CREATIONS_SIDEBAR_NAME } from "../app_constants";
 
@@ -33,6 +41,11 @@ export const useCanvasManagement = ({
 }) => {
   const [canvases, setCanvases] = useState<CanvasMetadata[]>([]);
   const [currentCanvasId, setCurrentCanvasId] = useAtom(currentCanvasIdAtom);
+  const setCurrentSceneId = useSetAtom(currentSceneIdAtom);
+  const setCurrentSceneCanEdit = useSetAtom(currentSceneCanEditAtom);
+  const setSceneCollabEnabled = useSetAtom(sceneCollabEnabledAtom);
+  const setSceneEditLock = useSetAtom(sceneEditLockAtom);
+  const failedSceneLoadsRef = useRef(new Set<string>());
 
   const refreshCanvases = useCallback(async () => {
     try {
@@ -64,6 +77,9 @@ export const useCanvasManagement = ({
         return;
       }
       try {
+        if (failedSceneLoadsRef.current.has(id)) {
+          return;
+        }
         if (id === currentCanvasId) {
           excalidrawAPI.updateScene({ appState: { openSidebar: null } });
           return;
@@ -73,10 +89,13 @@ export const useCanvasManagement = ({
 
         if (isCollaborating && collabAPI) {
           await collabAPI.saveCollaboration();
+          // 工作区每个 scene 一个房间；切场景必须先退房，避免把新内容广播进旧房间。
+          collabAPI.stopCollaboration(false);
         }
 
         // 必须用切换前捕获的画布 ID 保存，避免异步回调把旧场景写入目标画布。
-        if (currentCanvasId) {
+        // IndexedDB UUID 不能写进后端，否则会污染 SQLite / Workspace 列表。
+        if (isBackendPersistableCanvasId(currentCanvasId)) {
           await storageAdapter.saveCanvas(currentCanvasId, {
             elements: excalidrawAPI.getSceneElements(),
             appState: excalidrawAPI.getAppState(),
@@ -85,35 +104,56 @@ export const useCanvasManagement = ({
         }
 
         const canvasData = await storageAdapter.loadCanvas(id);
-        if (canvasData) {
-          const currentAppState = excalidrawAPI.getAppState();
-          const nextAppState = {
-            ...restoreAppState(canvasData.appState, currentAppState),
-            collaborators: currentAppState.collaborators,
-            openSidebar: null,
-          };
-
-          setCurrentCanvasId(id);
-
-          if (isCollaborating && collabAPI) {
-            await collabAPI.replaceScene({
-              elements: canvasData.elements,
-              appState: nextAppState,
-              files: canvasData.files,
-            });
-          } else {
-            excalidrawAPI.resetScene();
-            excalidrawAPI.addFiles(Object.values(canvasData.files));
-            excalidrawAPI.updateScene({
-              elements: canvasData.elements,
-              appState: nextAppState,
-              captureUpdate: CaptureUpdateAction.NEVER,
-            });
-          }
-
-          resetSaveStatus();
+        if (!canvasData) {
+          failedSceneLoadsRef.current.add(id);
+          setErrorMessage(
+            "无法打开此画布。请先登录，并通过邀请加入工作区后再打开。",
+          );
+          return;
         }
+        failedSceneLoadsRef.current.delete(id);
+
+        let canEdit = true;
+        let collabEnabled = false;
+        try {
+          const scene = await getScene(id);
+          canEdit = scene.canEdit !== false;
+          collabEnabled = Boolean(scene.collabEnabled);
+        } catch {
+          canEdit = true;
+        }
+        setCurrentSceneCanEdit(canEdit);
+        setSceneCollabEnabled(collabEnabled);
+        setSceneEditLock(null);
+
+        const currentAppState = excalidrawAPI.getAppState();
+        const nextAppState = {
+          ...restoreAppState(canvasData.appState, currentAppState),
+          collaborators: currentAppState.collaborators,
+          openSidebar: null,
+          viewModeEnabled: !canEdit,
+        };
+
+        setCurrentCanvasId(id);
+        if (isBackendPersistableCanvasId(id)) {
+          setCurrentSceneId(id);
+        }
+
+        excalidrawAPI.resetScene();
+        excalidrawAPI.addFiles(Object.values(canvasData.files ?? {}));
+        excalidrawAPI.updateScene({
+          elements: canvasData.elements ?? [],
+          appState: nextAppState,
+          captureUpdate: CaptureUpdateAction.NEVER,
+        });
+
+        resetSaveStatus();
       } catch (error) {
+        if (error instanceof AuthError) {
+          setErrorMessage("您需要登录才能加载此画布。");
+          return;
+        }
+        console.error("Failed to load canvas", error);
         setErrorMessage("Could not load the canvas.");
       }
     },
@@ -123,6 +163,10 @@ export const useCanvasManagement = ({
       collabAPI,
       setErrorMessage,
       setCurrentCanvasId,
+      setCurrentSceneId,
+      setCurrentSceneCanEdit,
+      setSceneCollabEnabled,
+      setSceneEditLock,
       currentCanvasId,
       resetSaveStatus,
     ],

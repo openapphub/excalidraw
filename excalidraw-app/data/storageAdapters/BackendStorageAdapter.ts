@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 
 import { dehydrateCanvasData, hydrateCanvasData } from "../storage";
+import { isIndexedDbCanvasId } from "../canvasId";
 
 import { generateThumbnail } from "../thumbnail";
 
@@ -74,11 +75,23 @@ export class BackendStorageAdapter implements IStorageAdapter {
       }
       throw new Error(`Failed to load canvas: ${response.statusText}`);
     }
-    const rawData = await response.json();
-    return hydrateCanvasData(rawData);
+    const text = await response.text();
+    if (!text.trim()) {
+      return hydrateCanvasData(null);
+    }
+    try {
+      return hydrateCanvasData(JSON.parse(text));
+    } catch {
+      return hydrateCanvasData(null);
+    }
   }
 
   async saveCanvas(id: string, data: CanvasData): Promise<void> {
+    // IndexedDB UUID 不得 upsert 进 SQLite。
+    if (isIndexedDbCanvasId(id)) {
+      console.warn("skip saving indexeddb canvas id to backend", id);
+      return;
+    }
     let dataForUpload: CanvasData;
     if (data.thumbnail) {
       dataForUpload = data;

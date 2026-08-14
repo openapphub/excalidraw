@@ -1,0 +1,539 @@
+// =============================================================================
+// ProfilePage - CSS Module
+// =============================================================================
+@use "../../../styles/mixins" as *;
+
+.page {
+  // Define --ui-font locally since component is outside .excalidraw container
+  --ui-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, Segoe UI,
+    Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--ui-font);
+
+  flex: 1;
+  padding: 32px 48px;
+  overflow-y: auto;
+  background: var(--default-bg-color, #fafafa);
+}
+
+// Loading state
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--default-border-color, #e5e5e5);
+  border-top-color: var(--color-primary, #6965db);
+  border-radius: 50%;
+  animation: profileSpin 1s linear infinite;
+}
+
+@keyframes profileSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Error state
+.error {
+  text-align: center;
+  padding: 48px;
+
+  p {
+    color: var(--color-danger, #dc2626);
+    margin-bottom: 16px;
+  }
+
+  button {
+    padding: 8px 16px;
+    background: var(--color-primary, #6965db);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-primary-darker, #5b57c5);
+    }
+  }
+}
+
+// Title
+.title {
+  margin: 0 0 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary-color, #1b1b1f);
+}
+
+.separator {
+  height: 1px;
+  background: var(--default-border-color, #e5e5e5);
+  margin: 24px 0;
+}
+
+// Messages
+.success {
+  padding: 12px 16px;
+  background: rgba(5, 150, 105, 0.1);
+  border: 1px solid var(--color-success, #059669);
+  border-radius: 8px;
+  color: var(--color-success, #059669);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.errorInline {
+  padding: 12px 16px;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid var(--color-danger, #dc2626);
+  border-radius: 8px;
+  color: var(--color-danger, #dc2626);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+// Two-column row layout
+.row {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 48px;
+  padding: 32px 0;
+  border-bottom: 1px solid var(--default-border-color, #e5e5e5);
+
+  &:first-of-type {
+    padding-top: 0;
+  }
+
+  &:last-of-type {
+    border-bottom: none;
+  }
+}
+
+.rowLabel {
+  h2 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-primary, #6965db);
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-secondary-color, #6b6b6b);
+  }
+}
+
+.rowContent {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.rowContentAvatar {
+  composes: rowContent;
+  align-items: flex-start;
+}
+
+// Avatar
+.avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--color-primary, #6965db);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.avatarInitials {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+}
+
+.avatarLinks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-primary, #6965db);
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.linkDanger {
+  composes: link;
+  color: var(--color-danger, #dc2626);
+}
+
+.linkSeparator {
+  color: var(--text-secondary-color, #9b9b9b);
+}
+
+// Field card (editable fields like name)
+.fieldCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--island-bg-color, #ffffff);
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  border-radius: 8px;
+  max-width: 400px;
+}
+
+// Field info (read-only fields like email, role)
+.fieldInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fieldIcon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary-color, #6b6b6b);
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.fieldValue {
+  flex: 1;
+  font-size: 15px;
+  color: var(--text-primary-color, #1b1b1f);
+}
+
+.editButton {
+  flex-shrink: 0;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary-color, #6b6b6b);
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--default-border-color, #e5e5e5);
+    color: var(--text-primary-color, #1b1b1f);
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+// Edit field (when editing name)
+.editField {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 400px;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--island-bg-color, #ffffff);
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  border-radius: 8px;
+  font-size: 15px;
+  color: var(--text-primary-color, #1b1b1f);
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  &:focus {
+    border-color: var(--color-primary, #6965db);
+  }
+
+  &::placeholder {
+    color: var(--text-secondary-color, #6b6b6b);
+  }
+}
+
+.editActions {
+  display: flex;
+  gap: 8px;
+}
+
+// Role badge
+.roleBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  background: var(--default-bg-color, #f5f5f5);
+  color: var(--text-secondary-color, #6b6b6b);
+}
+
+.roleBadgeAdmin {
+  composes: roleBadge;
+  background: var(--color-primary-light, rgba(105, 101, 219, 0.15));
+  color: var(--color-primary, #6965db);
+}
+
+// Buttons
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.buttonPrimary {
+  composes: button;
+  background: var(--color-primary, #6965db);
+  color: white;
+
+  &:hover:not(:disabled) {
+    background: var(--color-primary-darker, #5b57c5);
+  }
+}
+
+.buttonSecondary {
+  composes: button;
+  background: transparent;
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  color: var(--text-primary-color, #1b1b1f);
+
+  &:hover:not(:disabled) {
+    background: var(--default-border-color, #e5e5e5);
+  }
+}
+
+.buttonSignout {
+  composes: buttonPrimary;
+  width: auto;
+  max-width: 150px;
+}
+
+// Section divider
+.sectionDivider {
+  height: 1px;
+  background: var(--default-border-color, #e5e5e5);
+  margin: 32px 0;
+}
+
+// Shortcut hint
+.shortcutHint {
+  font-size: 12px;
+  color: var(--text-secondary-color, #6b6b6b);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  margin-top: 4px;
+}
+
+// Theme selector
+.themeSelector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.themeDropdown {
+  appearance: none;
+  padding: 10px 36px 10px 16px;
+  background: var(--island-bg-color, #fff);
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: var(--ui-font);
+  color: var(--text-primary-color, #1b1b1f);
+  cursor: pointer;
+  min-width: 160px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6b6b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary, #6965db);
+  }
+
+  &:hover {
+    border-color: var(--color-primary, #6965db);
+  }
+}
+
+.themeIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--icon-fill-color, #6b6b6b);
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+// Dark mode
+@include dark-mode {
+  .page {
+    background: var(--default-bg-color, #1e1e24);
+  }
+
+  .spinner {
+    border-color: var(--default-border-color, #3d3d3d);
+    border-top-color: var(--color-primary, #a5a1ff);
+  }
+
+  .title {
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .separator {
+    background: var(--default-border-color, #3d3d3d);
+  }
+
+  .row {
+    border-bottom-color: var(--default-border-color, #3d3d3d);
+  }
+
+  .rowLabel {
+    h2 {
+      color: var(--color-primary-light, #a5a1ff);
+    }
+
+    p {
+      color: var(--text-secondary-color, #9b9b9b);
+    }
+  }
+
+  .fieldCard {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d3d);
+  }
+
+  .fieldValue {
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .input {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d3d);
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .roleBadge {
+    background: var(--default-bg-color, #2d2d33);
+    color: var(--text-secondary-color, #9b9b9b);
+  }
+
+  .roleBadgeAdmin {
+    background: var(--color-primary-light, rgba(165, 161, 255, 0.15));
+    color: var(--color-primary-light, #a5a1ff);
+  }
+
+  .editButton:hover {
+    background: var(--default-border-color, #3d3d3d);
+  }
+
+  .buttonSecondary {
+    border-color: var(--default-border-color, #3d3d3d);
+    color: var(--text-primary-color, #e1e1e1);
+
+    &:hover:not(:disabled) {
+      background: var(--default-border-color, #3d3d3d);
+    }
+  }
+
+  .sectionDivider {
+    background: var(--default-border-color, #3d3d3d);
+  }
+
+  .themeDropdown {
+    background-color: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d3d);
+    color: var(--text-primary-color, #e1e1e1);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239b9b9b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+
+    option {
+      background: var(--island-bg-color, #232329);
+      color: var(--text-primary-color, #e1e1e1);
+    }
+  }
+}
+
+// Responsive - stack on mobile
+@media (max-width: 768px) {
+  .page {
+    padding: 24px 16px;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .rowContentAvatar {
+    align-items: flex-start;
+  }
+
+  .fieldCard,
+  .editField {
+    max-width: 100%;
+  }
+}

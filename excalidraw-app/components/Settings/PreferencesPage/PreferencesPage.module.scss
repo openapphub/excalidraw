@@ -1,0 +1,172 @@
+// =============================================================================
+// PreferencesPage - CSS Module
+// =============================================================================
+@use "../../../styles/mixins" as *;
+
+.page {
+  // Define --ui-font locally since component is outside .excalidraw container
+  --ui-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, Segoe UI,
+    Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--ui-font);
+
+  flex: 1;
+  padding: 32px 48px;
+  overflow-y: auto;
+  background: var(--default-bg-color, #fafafa);
+}
+
+.title {
+  margin: 0 0 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary-color, #1b1b1f);
+}
+
+.separator {
+  height: 1px;
+  background: var(--default-border-color, #e5e5e5);
+  margin: 24px 0;
+}
+
+// Row layout
+.row {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 48px;
+  padding: 32px 0;
+  border-bottom: 1px solid var(--default-border-color, #e5e5e5);
+
+  &:first-of-type {
+    padding-top: 0;
+  }
+
+  &:last-of-type {
+    border-bottom: none;
+  }
+}
+
+.rowLabel {
+  h2 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-primary, #6965db);
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-secondary-color, #6b6b6b);
+  }
+}
+
+.rowContent {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+// Theme selector
+.themeSelector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.themeDropdown {
+  padding: 8px 40px 8px 12px;
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  border-radius: 6px;
+  background: var(--island-bg-color, #ffffff);
+  color: var(--text-primary-color, #1b1b1f);
+  font-size: 14px;
+  font-family: var(--ui-font);
+  cursor: pointer;
+  appearance: none;
+  min-width: 180px;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary, #6965db);
+    box-shadow: 0 0 0 3px rgba(105, 101, 219, 0.1);
+  }
+}
+
+.themeIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary-color, #6b6b6b);
+  pointer-events: none;
+  position: absolute;
+  right: 12px;
+}
+
+.shortcutHint {
+  font-size: 12px;
+  color: var(--text-secondary-color, #9b9b9b);
+  font-family: monospace;
+}
+
+.drawingGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+  max-width: 520px;
+}
+
+.drawingField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary-color, #6b6b6b);
+
+  .themeDropdown {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+// Dark mode
+@include dark-mode {
+  .page {
+    background: var(--default-bg-color, #1e1e24);
+  }
+
+  .title {
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .separator {
+    background: var(--default-border-color, #3d3d3d);
+  }
+
+  .rowLabel {
+    h2 {
+      color: var(--color-primary, #a5a1ff);
+    }
+
+    p {
+      color: var(--text-secondary-color, #9b9b9b);
+    }
+  }
+
+  .themeDropdown {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d3d);
+    color: var(--text-primary-color, #e1e1e1);
+
+    &:focus {
+      border-color: var(--color-primary, #a5a1ff);
+      box-shadow: 0 0 0 3px rgba(165, 161, 255, 0.1);
+    }
+  }
+
+  .themeIcon {
+    color: var(--text-secondary-color, #9b9b9b);
+  }
+}

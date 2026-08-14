@@ -14,6 +14,17 @@ import type { Theme } from "@excalidraw/element/types";
 import { useAtom, useSetAtom, userAtom, saveAsDialogAtom } from "../app-jotai";
 import { LanguageList } from "../app-language/LanguageList";
 
+import { openWorkspaceSidebarAtom } from "./Settings/settingsState";
+
+const workspaceIcon = (
+  <svg viewBox="0 0 24 24" fill="none">
+    <path
+      d="M4 6.75A2.75 2.75 0 0 1 6.75 4h3.19c.6 0 1.16.29 1.5.78l.72 1.02h5.09A2.75 2.75 0 0 1 20 8.55v8.7A2.75 2.75 0 0 1 17.25 20H6.75A2.75 2.75 0 0 1 4 17.25V6.75Zm2.75-1.25c-.69 0-1.25.56-1.25 1.25v10.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-8.7c0-.69-.56-1.25-1.25-1.25h-5.48a1.5 1.5 0 0 1-1.22-.64l-.73-1.02a.34.34 0 0 0-.28-.14H6.75Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 export const AppMainMenu: React.FC<{
   onCollabDialogOpen: () => any;
   isCollaborating: boolean;
@@ -25,6 +36,7 @@ export const AppMainMenu: React.FC<{
 }> = React.memo((props) => {
   const [user, setUser] = useAtom(userAtom);
   const setSaveAsDialog = useSetAtom(saveAsDialogAtom);
+  const openWorkspaceSidebar = useSetAtom(openWorkspaceSidebarAtom);
 
   const handleLogin = () => {
     window.location.href = "/auth/login";
@@ -38,6 +50,13 @@ export const AppMainMenu: React.FC<{
 
   return (
     <MainMenu>
+      <MainMenu.Item
+        onSelect={() => openWorkspaceSidebar()}
+        icon={workspaceIcon}
+      >
+        Workspace
+      </MainMenu.Item>
+      <MainMenu.Separator />
       <MainMenu.DefaultItems.LoadScene />
       <MainMenu.DefaultItems.SaveToActiveFile />
       <MainMenu.Item
@@ -147,10 +166,7 @@ export const AppMainMenu: React.FC<{
         GitHub
       </DropdownMenuItemLink>
       <MainMenu.Separator />
-      <MainMenu.DefaultItems.ToggleTheme
-        allowSystemTheme
-        theme={props.theme}
-      />
+      <MainMenu.DefaultItems.ToggleTheme allowSystemTheme theme={props.theme} />
       <MainMenu.ItemCustom>
         <LanguageList style={{ width: "100%" }} />
       </MainMenu.ItemCustom>

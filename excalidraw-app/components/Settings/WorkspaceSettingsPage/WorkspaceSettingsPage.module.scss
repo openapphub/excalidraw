@@ -1,0 +1,464 @@
+// =============================================================================
+// WorkspaceSettingsPage - CSS Module
+// =============================================================================
+@use "../../../styles/mixins" as *;
+
+.page {
+  // Define --ui-font locally since component is outside .excalidraw container
+  --ui-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, Segoe UI,
+    Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--ui-font);
+
+  flex: 1;
+  padding: 32px 48px;
+  overflow-y: auto;
+  background: var(--default-bg-color, #fafafa);
+}
+
+// Empty state
+.empty {
+  text-align: center;
+  padding: 48px;
+  color: var(--text-secondary-color, #6b6b6b);
+}
+
+// Title
+.title {
+  margin: 0 0 8px;
+  font-size: 25px;
+  font-weight: 500;
+  color: var(--text-primary-color, #1b1b1f);
+}
+
+.subtitle {
+  margin: 0 0 0;
+  font-size: 14px;
+  color: var(--text-secondary-color, #6b6b6b);
+}
+
+.separator {
+  height: 1px;
+  background: var(--default-border-color, #e5e5e5);
+  margin: 24px 0 32px;
+}
+
+// Messages
+.success {
+  padding: 12px 16px;
+  background: rgba(5, 150, 105, 0.1);
+  border: 1px solid var(--color-success, #059669);
+  border-radius: 8px;
+  color: var(--color-success, #059669);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.errorInline {
+  padding: 12px 16px;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid var(--color-danger, #dc2626);
+  border-radius: 8px;
+  color: var(--color-danger, #dc2626);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+// Sections
+.section {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 32px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--default-border-color, #e5e5e5);
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+}
+
+.sectionTitle {
+  flex: 0 0 200px; // Fixed width for label column
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary-color, #1b1b1f);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sectionContent {
+  flex: 1;
+  min-width: 0; // Allow content to shrink
+}
+
+.sectionDanger {
+  display: block; // Not using flex layout, stack vertically
+  background: transparent;
+  margin: 32px 0 0;
+  padding: 24px 0 0;
+  border-radius: 0;
+  border: none;
+  border-bottom: none;
+
+  .sectionTitle {
+    color: var(--color-danger, #dc2626);
+    margin-bottom: 24px; // Space below the "Danger Zone" title
+  }
+}
+
+// Avatar section
+.avatarSection {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &:hover .avatarOverlay,
+  &:focus .avatarOverlay {
+    opacity: 1;
+  }
+}
+
+.avatarInitials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.avatarOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+
+  svg {
+    width: 28px;
+    height: 28px;
+    color: white;
+  }
+}
+
+.avatarInfo {
+  flex: 1;
+
+  p {
+    font-size: 14px;
+    color: var(--text-secondary-color, #6b6b6b);
+    margin: 0 0 12px;
+  }
+}
+
+// Fields
+.field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--island-bg-color, #ffffff);
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  border-radius: 8px;
+  min-height: 48px;
+}
+
+.fieldReadonly {
+  composes: field;
+  background: transparent;
+}
+
+.fieldValue {
+  flex: 1;
+  font-size: 15px;
+  color: var(--text-primary-color, #1b1b1f);
+}
+
+.fieldValueMono {
+  composes: fieldValue;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+  font-size: 14px;
+}
+
+.fieldHint {
+  font-size: 13px;
+  color: var(--text-secondary-color, #6b6b6b);
+  margin: 8px 0 0;
+}
+
+.editButton {
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary-color, #6b6b6b);
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--default-border-color, #e5e5e5);
+    color: var(--text-primary-color, #1b1b1f);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+// Edit field
+.editField {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--island-bg-color, #ffffff);
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  border-radius: 8px;
+  font-size: 15px;
+  color: var(--text-primary-color, #1b1b1f);
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  &:focus {
+    border-color: var(--color-primary, #6965db);
+  }
+
+  &::placeholder {
+    color: var(--text-secondary-color, #6b6b6b);
+  }
+}
+
+.editActions {
+  display: flex;
+  gap: 8px;
+}
+
+// Danger zone item - uses two-column layout like other sections
+.dangerItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 32px; // Match section gap
+}
+
+.dangerInfo {
+  flex: 0 0 200px; // Same as sectionTitle width - left column
+
+  h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary-color, #1b1b1f);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  p {
+    display: none; // Hide the description paragraph, it will go in dangerContent
+  }
+}
+
+.dangerContent {
+  flex: 1; // Right column - takes remaining space
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  p {
+    font-size: 14px;
+    color: var(--text-secondary-color, #6b6b6b);
+    margin: 0;
+    line-height: 1.5;
+  }
+}
+
+// Buttons
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  white-space: nowrap;
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.buttonPrimary {
+  composes: button;
+  background: var(--color-primary, #6965db);
+  color: white;
+
+  &:hover:not(:disabled) {
+    background: var(--color-primary-darker, #5b57c5);
+  }
+}
+
+.buttonSecondary {
+  composes: button;
+  background: transparent;
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  color: var(--text-primary-color, #1b1b1f);
+
+  &:hover:not(:disabled) {
+    background: var(--default-border-color, #e5e5e5);
+  }
+}
+
+.buttonDangerOutline {
+  composes: button;
+  background: transparent;
+  border: 1px solid var(--color-danger, #dc2626);
+  color: var(--color-danger, #dc2626);
+
+  &:hover:not(:disabled) {
+    background: rgba(220, 38, 38, 0.1);
+  }
+}
+
+// Dark mode
+@include dark-mode {
+  .page {
+    background: var(--default-bg-color, #1e1e24);
+  }
+
+  .title {
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .separator {
+    background: var(--default-border-color, #3d3d3d);
+  }
+
+  .subtitle {
+    color: var(--text-secondary-color, #9b9b9b);
+  }
+
+  .section {
+    border-bottom-color: var(--default-border-color, #3d3d3d);
+  }
+
+  .sectionDanger {
+    background: transparent; // No background in dark mode either
+    border: none; // No border
+  }
+
+  .field {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d3d);
+  }
+
+  .fieldValue {
+    color: var(--text-primary-color, #e1e1e1);
+  }
+
+  .fieldHint {
+    color: var(--text-secondary-color, #9b9b9b);
+  }
+
+  .input {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d3d);
+    color: var(--text-primary-color, #e1e1e1);
+
+    &::placeholder {
+      color: var(--text-secondary-color, #9b9b9b);
+    }
+  }
+
+  .avatarInfo p {
+    color: var(--text-secondary-color, #9b9b9b);
+  }
+
+  .dangerInfo {
+    h3 {
+      color: var(--text-primary-color, #e1e1e1);
+    }
+
+    p {
+      color: var(--text-secondary-color, #9b9b9b);
+    }
+  }
+
+  .editButton {
+    color: var(--text-secondary-color, #9b9b9b);
+
+    &:hover {
+      background: var(--default-border-color, #3d3d3d);
+      color: var(--text-primary-color, #e1e1e1);
+    }
+  }
+
+  .buttonSecondary {
+    border-color: var(--default-border-color, #3d3d3d);
+    color: var(--text-primary-color, #e1e1e1);
+
+    &:hover:not(:disabled) {
+      background: var(--default-border-color, #3d3d3d);
+    }
+  }
+}
+
+// Responsive
+@media (max-width: 640px) {
+  .page {
+    padding: 24px 16px;
+  }
+
+  .avatarSection {
+    flex-direction: column;
+  }
+
+  .dangerItem {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sectionDanger {
+    margin: 32px 0 0;
+    padding: 16px;
+  }
+}
