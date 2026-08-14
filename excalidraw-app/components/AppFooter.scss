@@ -1,18 +1,11 @@
 // =============================================================================
-// AppFooter - 底部左侧额外按钮（"画布列表"）
+// AppFooter - 底部左侧"画布列表"按钮
 // 照抄 AstraDraw 存档源码 docs/astradraw-reference/AppFooter/AppFooter.module.scss
-// 的数值（footerLeftExtra / sidebarButton / toolIconWrapper），转普通 scss。
-// 权威数值（用户实测确认）：36px 按钮、无边框、浅灰背景 #ececf3、
-// gap .375rem + margin-left .5rem。
+// 的 sidebarButton/toolIconWrapper 数值（按钮样式在 app 侧 scss）。
+// footer-left-extra 容器样式在 packages/excalidraw/components/LayerUI.scss
+// （官方作用域，AstraDraw 同款拆分）。
+// 权威数值（用户实测确认）：36px 按钮、无边框、浅灰背景 #ececf3。
 // =============================================================================
-
-// 底部左侧额外按钮容器：margin-left 拉开与官方 zoom/undo 按钮的距离
-.footer-left-extra {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  margin-left: 0.5rem;
-}
 
 // 侧边栏切换按钮（画布列表）：36px 图标按钮，浅灰背景
 .sidebarButton {

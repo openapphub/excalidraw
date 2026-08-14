@@ -118,6 +118,14 @@
       margin-top: auto;
       margin-bottom: auto;
     }
+
+    // 自建扩展：底部左侧额外按钮容器（复刻 AstraDraw 存档源码 LayerUI.scss，
+    // 照抄 .footer-left-extra 数值：flex + gap .375rem + margin-left .5rem）
+    .footer-left-extra {
+      display: flex;
+      gap: 0.375rem;
+      margin-left: 0.5rem;
+    }
   }
 
   // on tablet, the pen mode button is rendered as a separate floating button

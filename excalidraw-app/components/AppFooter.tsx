@@ -54,21 +54,20 @@ const AppFooterLeft = React.memo(
     return (
       <FooterLeftExtraTunnel.In>
         <div className="footer-left-extra zen-mode-transition">
-          <div className="excalidraw-tooltip-wrapper">
-            <Tooltip label="画布列表">
-              <button
-                className="sidebarButton"
-                onClick={handleToggleCreationsSidebar}
-                onPointerDown={(e) => e.stopPropagation()}
-                type="button"
-                aria-label="画布列表"
-              >
-                <div className="toolIconWrapper" aria-hidden="true">
-                  {LoadIcon}
-                </div>
-              </button>
-            </Tooltip>
-          </div>
+          {/* 官方 Tooltip 自带 excalidraw-tooltip-wrapper，这里不手动包 */}
+          <Tooltip label="画布列表">
+            <button
+              className="sidebarButton"
+              onClick={handleToggleCreationsSidebar}
+              onPointerDown={(e) => e.stopPropagation()}
+              type="button"
+              aria-label="画布列表"
+            >
+              <div className="toolIconWrapper" aria-hidden="true">
+                {LoadIcon}
+              </div>
+            </button>
+          </Tooltip>
         </div>
       </FooterLeftExtraTunnel.In>
     );

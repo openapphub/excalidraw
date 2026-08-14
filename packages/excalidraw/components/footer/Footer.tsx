@@ -63,10 +63,12 @@ const Footer = ({
                   })}
                 />
               )}
+              {/* 自建扩展：app 侧通过 FooterLeftExtraTunnel.In 注入底部左侧按钮。
+                  AstraDraw 原版位置：Section 内部（UndoRedoActions 之后），与
+                  zoom/undo 同一行 —— 挂 Section 外会掉到下一行（实测 2026-08） */}
+              <FooterLeftExtraTunnel.Out />
             </Section>
           </Stack.Col>
-          {/* 自建扩展：app 侧通过 FooterLeftExtraTunnel.In 注入底部左侧按钮（如"画布列表"） */}
-          <FooterLeftExtraTunnel.Out />
         </div>
       )}
       <FooterCenterTunnel.Out />
