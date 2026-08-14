@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback, useEffect } from "react";
 
 import clsx from "clsx";
 
-import { Dialog } from "@excalidraw/excalidraw/components/Dialog";
 import { FilledButton } from "@excalidraw/excalidraw/components/FilledButton";
 
 import {
@@ -16,8 +15,9 @@ import {
 
 import { timeAgo } from "../utils/time";
 
-import { useSetAtom } from "../app-jotai";
+import { useAtom, useSetAtom } from "../app-jotai";
 import {
+  workspaceSidebarOpenAtom,
   createCanvasDialogAtom,
   renameCanvasDialogAtom,
 } from "../app-jotai";
@@ -64,6 +64,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onMoveCanvas,
   onCreateCanvas,
 }) => {
+  const [isOpen, setIsOpen] = useAtom(workspaceSidebarOpenAtom);
   const setCreateCanvasDialog = useSetAtom(createCanvasDialogAtom);
   const setRenameCanvasDialog = useSetAtom(renameCanvasDialogAtom);
 
@@ -265,7 +266,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   );
 
   return (
-    <div className="ws-sidebar">
+    <div
+      className={clsx("ws-sidebar", { "ws-sidebar--open": isOpen })}
+      data-testid="workspace-sidebar"
+    >
       {/* 顶部：标题 + 新建分组 */}
       <div className="ws-sidebar__header">
         <div className="ws-sidebar__title-row">
@@ -406,138 +410,147 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
         </FilledButton>
       </div>
 
-      {/* 新建分组对话框（官方 Dialog 全局居中） */}
+      {/* 新建分组对话框（自绘 overlay：侧边栏在 Excalidraw 外层，官方 Dialog 依赖内部 context） */}
       {showCreateWorkspace && (
-        <Dialog
-          onCloseRequest={() => setShowCreateWorkspace(false)}
-          title="新建分组"
+        <div
+          className="ws-dialog-overlay"
+          onClick={() => setShowCreateWorkspace(false)}
         >
-          <div className="ws-dialog__content">
-            <div className="ws-dialog__form-group">
-              <label>分组名称</label>
-              <input
-                autoFocus
-                value={newWorkspaceName}
-                placeholder="例如：项目A、灵感收集…"
-                onChange={(e) => setNewWorkspaceName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleCreateWorkspace();
-                  }
-                }}
-              />
+          <div className="ws-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>新建分组</h3>
+            <div className="ws-dialog__content">
+              <div className="ws-dialog__form-group">
+                <label>分组名称</label>
+                <input
+                  autoFocus
+                  value={newWorkspaceName}
+                  placeholder="例如：项目A、灵感收集…"
+                  onChange={(e) => setNewWorkspaceName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleCreateWorkspace();
+                    }
+                  }}
+                />
+              </div>
+              <div className="ws-dialog__form-group">
+                <label>备注（可选）</label>
+                <input
+                  value={newWorkspaceNote}
+                  placeholder="这个分组放什么…"
+                  onChange={(e) => setNewWorkspaceNote(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="ws-dialog__form-group">
-              <label>备注（可选）</label>
-              <input
-                value={newWorkspaceNote}
-                placeholder="这个分组放什么…"
-                onChange={(e) => setNewWorkspaceNote(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="ws-dialog__actions">
-            <button
-              className="ws-dialog__cancel"
-              onClick={() => setShowCreateWorkspace(false)}
-            >
-              取消
-            </button>
-            <button
-              className="ws-dialog__confirm"
-              disabled={!newWorkspaceName.trim()}
-              onClick={handleCreateWorkspace}
-            >
-              创建
-            </button>
-          </div>
-        </Dialog>
-      )}
-
-      {/* 重命名分组对话框（官方 Dialog 全局居中） */}
-      {renamingWorkspace && (
-        <Dialog
-          onCloseRequest={() => setRenamingWorkspace(null)}
-          title="重命名分组"
-        >
-          <div className="ws-dialog__content">
-            <div className="ws-dialog__form-group">
-              <label>分组名称</label>
-              <input
-                autoFocus
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleRenameWorkspaceSubmit();
-                  }
-                }}
-              />
-            </div>
-          </div>
-          <div className="ws-dialog__actions">
-            <button
-              className="ws-dialog__cancel"
-              onClick={() => setRenamingWorkspace(null)}
-            >
-              取消
-            </button>
-            <button
-              className="ws-dialog__confirm"
-              disabled={!renameValue.trim()}
-              onClick={handleRenameWorkspaceSubmit}
-            >
-              保存
-            </button>
-          </div>
-        </Dialog>
-      )}
-
-      {/* 移动到分组对话框（官方 Dialog 全局居中，复刻 AstraDraw CopyMoveDialog） */}
-      {moveTarget && (
-        <Dialog
-          onCloseRequest={() => setMoveTarget(null)}
-          title="移动到分组"
-        >
-          <div className="ws-dialog__content">
-            <p className="ws-dialog__desc">
-              将「{moveTarget.name}」移动到分组：
-            </p>
-            <div className="ws-dialog__form-group">
-              <select
-                value={moveTargetId}
-                onChange={(e) => setMoveTargetId(e.target.value)}
+            <div className="ws-dialog__actions">
+              <button
+                className="ws-dialog__cancel"
+                onClick={() => setShowCreateWorkspace(false)}
               >
-                <option value="">选择分组…</option>
-                {workspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id}>
-                    {ws.name}
-                  </option>
-                ))}
-              </select>
+                取消
+              </button>
+              <button
+                className="ws-dialog__confirm"
+                disabled={!newWorkspaceName.trim()}
+                onClick={handleCreateWorkspace}
+              >
+                创建
+              </button>
             </div>
           </div>
-          <div className="ws-dialog__actions">
-            <button
-              className="ws-dialog__cancel"
-              onClick={() => setMoveTarget(null)}
-            >
-              取消
-            </button>
-            <button
-              className="ws-dialog__confirm"
-              disabled={!moveTargetId || moveTargetId === moveTarget.workspaceId}
-              onClick={() => {
-                if (moveTarget) {
-                  onMoveCanvas(moveTarget.id, moveTargetId);
-                }
-                setMoveTarget(null);
-              }}
-            >
-              移动
-            </button>
+        </div>
+      )}
+
+      {/* 重命名分组对话框（自绘 overlay） */}
+      {renamingWorkspace && (
+        <div
+          className="ws-dialog-overlay"
+          onClick={() => setRenamingWorkspace(null)}
+        >
+          <div className="ws-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>重命名分组</h3>
+            <div className="ws-dialog__content">
+              <div className="ws-dialog__form-group">
+                <label>分组名称</label>
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleRenameWorkspaceSubmit();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="ws-dialog__actions">
+              <button
+                className="ws-dialog__cancel"
+                onClick={() => setRenamingWorkspace(null)}
+              >
+                取消
+              </button>
+              <button
+                className="ws-dialog__confirm"
+                disabled={!renameValue.trim()}
+                onClick={handleRenameWorkspaceSubmit}
+              >
+                保存
+              </button>
+            </div>
           </div>
-        </Dialog>
+        </div>
+      )}
+
+      {/* 移动到分组对话框（自绘 overlay，复刻 AstraDraw CopyMoveDialog） */}
+      {moveTarget && (
+        <div
+          className="ws-dialog-overlay"
+          onClick={() => setMoveTarget(null)}
+        >
+          <div className="ws-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>移动到分组</h3>
+            <div className="ws-dialog__content">
+              <p className="ws-dialog__desc">
+                将「{moveTarget.name}」移动到分组：
+              </p>
+              <div className="ws-dialog__form-group">
+                <select
+                  value={moveTargetId}
+                  onChange={(e) => setMoveTargetId(e.target.value)}
+                >
+                  <option value="">选择分组…</option>
+                  {workspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="ws-dialog__actions">
+              <button
+                className="ws-dialog__cancel"
+                onClick={() => setMoveTarget(null)}
+              >
+                取消
+              </button>
+              <button
+                className="ws-dialog__confirm"
+                disabled={!moveTargetId || moveTargetId === moveTarget.workspaceId}
+                onClick={() => {
+                  if (moveTarget) {
+                    onMoveCanvas(moveTarget.id, moveTargetId);
+                  }
+                  setMoveTarget(null);
+                }}
+              >
+                移动
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

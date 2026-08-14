@@ -178,6 +178,7 @@ import { CloudflareKVAdapter } from "./data/storageAdapters/CloudflareKVAdapter"
 import { S3StorageAdapter } from "./data/storageAdapters/S3StorageAdapter";
 
 import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
+import { WorkspaceSidebarTrigger } from "./components/WorkspaceSidebarTrigger";
 
 import { CREATIONS_SIDEBAR_NAME } from "./app_constants";
 
@@ -1201,6 +1202,28 @@ const ExcalidrawWrapper = () => {
         "is-collaborating": isCollaborating,
       })}
     >
+      {/* 左侧滑出侧边栏（copy AstraDraw WorkspaceSidebar：app 根容器 flex
+          子元素，margin-left 负值滑出，非 fixed 定位） */}
+      <WorkspaceSidebar
+        canvases={canvases}
+        workspaces={workspaces}
+        currentCanvasId={currentCanvasId}
+        activeWorkspaceId={activeWorkspaceId}
+        onWorkspaceFilterChange={(id) => setActiveWorkspaceId(id)}
+        onCanvasSelect={handleCanvasSelect}
+        onCanvasDelete={handleCanvasDelete}
+        onCreateWorkspace={(name, note) => createWorkspace(name, note)}
+        onRenameWorkspace={(id, name) => updateWorkspace(id, { name })}
+        onDeleteWorkspace={async (id) => {
+          await deleteWorkspace(id);
+          await refreshCanvases();
+        }}
+        onMoveCanvas={async (canvasId, workspaceId) => {
+          await moveCanvasToWorkspace(canvasId, workspaceId);
+          await refreshCanvases();
+        }}
+        onCreateCanvas={() => setCreateCanvasDialog({ isOpen: true })}
+      />
       <Excalidraw
         onExcalidrawAPI={excalidrawRefCallback}
         onChange={onChange}
@@ -1257,12 +1280,6 @@ const ExcalidrawWrapper = () => {
 
           return (
             <div style={{ display: "flex", alignItems: "center" }}>
-              <Sidebar.Trigger
-                name={CREATIONS_SIDEBAR_NAME}
-                tab="creations"
-                icon={LoadIcon}
-                title={t("toolBar.myCreations")}
-              />
               {statusMessage && (
                 <div
                   style={{
@@ -1306,37 +1323,7 @@ const ExcalidrawWrapper = () => {
         }}
       >
         <DefaultSidebar __fallback />
-        <Sidebar name={CREATIONS_SIDEBAR_NAME} __fallback>
-          <Sidebar.Tabs>
-            <Sidebar.Header />
-            <Sidebar.Tab tab="creations">
-              <WorkspaceSidebar
-                canvases={canvases}
-                workspaces={workspaces}
-                currentCanvasId={currentCanvasId}
-                activeWorkspaceId={activeWorkspaceId}
-                onWorkspaceFilterChange={(id) => setActiveWorkspaceId(id)}
-                onCanvasSelect={handleCanvasSelect}
-                onCanvasDelete={handleCanvasDelete}
-                onCreateWorkspace={(name, note) =>
-                  createWorkspace(name, note)
-                }
-                onRenameWorkspace={(id, name) => updateWorkspace(id, { name })}
-                onDeleteWorkspace={async (id) => {
-                  // 删除分组会把组内画布迁回 default，需同步刷新画布列表
-                  await deleteWorkspace(id);
-                  await refreshCanvases();
-                }}
-                onMoveCanvas={async (canvasId, workspaceId) => {
-                  // 移动成功后必须刷新画布列表，否则 UI 不更新（实测：接口成功但页面旧分组，需手动刷新）
-                  await moveCanvasToWorkspace(canvasId, workspaceId);
-                  await refreshCanvases();
-                }}
-                onCreateCanvas={() => setCreateCanvasDialog({ isOpen: true })}
-              />
-            </Sidebar.Tab>
-          </Sidebar.Tabs>
-        </Sidebar>
+        <WorkspaceSidebarTrigger />
         <AppMainMenu
           onCollabDialogOpen={onCollabDialogOpen}
           isCollaborating={isCollaborating}
