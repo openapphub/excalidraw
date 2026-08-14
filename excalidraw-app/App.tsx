@@ -1322,10 +1322,16 @@ const ExcalidrawWrapper = () => {
                   createWorkspace(name, note)
                 }
                 onRenameWorkspace={(id, name) => updateWorkspace(id, { name })}
-                onDeleteWorkspace={(id) => deleteWorkspace(id)}
-                onMoveCanvas={(canvasId, workspaceId) =>
-                  moveCanvasToWorkspace(canvasId, workspaceId)
-                }
+                onDeleteWorkspace={async (id) => {
+                  // 删除分组会把组内画布迁回 default，需同步刷新画布列表
+                  await deleteWorkspace(id);
+                  await refreshCanvases();
+                }}
+                onMoveCanvas={async (canvasId, workspaceId) => {
+                  // 移动成功后必须刷新画布列表，否则 UI 不更新（实测：接口成功但页面旧分组，需手动刷新）
+                  await moveCanvasToWorkspace(canvasId, workspaceId);
+                  await refreshCanvases();
+                }}
                 onCreateCanvas={() => setCreateCanvasDialog({ isOpen: true })}
               />
             </Sidebar.Tab>
