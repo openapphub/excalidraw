@@ -15,6 +15,19 @@ export interface CanvasMetadata {
   createdAt: string;
   updatedAt: string;
   thumbnail?: string;
+  /** 画布所属的工作区 id（默认 "default"）。 */
+  workspaceId: string;
+}
+
+/**
+ * Describes the metadata of a workspace（画布目录分组）。
+ */
+export interface WorkspaceMetadata {
+  id: string;
+  name: string;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -71,6 +84,42 @@ export interface IStorageAdapter {
    * @param newName The new name for the canvas.
    */
   renameCanvas(id: string, newName: string): Promise<void>;
+
+  /**
+   * Lists all workspaces available for the current user.
+   */
+  listWorkspaces(): Promise<WorkspaceMetadata[]>;
+
+  /**
+   * Creates a new workspace.
+   * @param name The name of the new workspace.
+   * @param note Optional note/description for the workspace.
+   * @returns The metadata of the newly created workspace.
+   */
+  createWorkspace(name: string, note?: string): Promise<WorkspaceMetadata>;
+
+  /**
+   * Updates a workspace's name/note.
+   * @param id The unique identifier of the workspace to update.
+   * @param patch Partial fields to update.
+   */
+  updateWorkspace(
+    id: string,
+    patch: { name?: string; note?: string },
+  ): Promise<void>;
+
+  /**
+   * Deletes a workspace.
+   * @param id The unique identifier of the workspace to delete.
+   */
+  deleteWorkspace(id: string): Promise<void>;
+
+  /**
+   * Moves a canvas into a different workspace.
+   * @param canvasId The unique identifier of the canvas to move.
+   * @param workspaceId The target workspace id.
+   */
+  moveCanvasToWorkspace(canvasId: string, workspaceId: string): Promise<void>;
 }
 
 /**

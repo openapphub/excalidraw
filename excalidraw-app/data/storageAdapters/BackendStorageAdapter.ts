@@ -4,7 +4,12 @@ import { dehydrateCanvasData, hydrateCanvasData } from "../storage";
 
 import { generateThumbnail } from "../thumbnail";
 
-import type { CanvasData, CanvasMetadata, IStorageAdapter } from "../storage";
+import type {
+  CanvasData,
+  CanvasMetadata,
+  IStorageAdapter,
+  WorkspaceMetadata,
+} from "../storage";
 
 export class AuthError extends Error {
   constructor(message: string) {
@@ -14,6 +19,7 @@ export class AuthError extends Error {
 }
 
 const API_BASE_URL = "/api/v2/kv";
+const WORKSPACES_BASE_URL = "/api/v2/workspaces";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
@@ -47,7 +53,11 @@ export class BackendStorageAdapter implements IStorageAdapter {
       return [];
     }
 
-    return canvases;
+    // 兼容后端尚未返回 workspaceId 的情况（迁移期间），统一默认 "default"。
+    return canvases.map((canvas) => ({
+      ...canvas,
+      workspaceId: canvas.workspaceId || "default",
+    }));
   }
 
   async loadCanvas(id: string): Promise<CanvasData | null> {
@@ -121,6 +131,10 @@ export class BackendStorageAdapter implements IStorageAdapter {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       thumbnail: dataWithThumbnail.thumbnail,
+      // appState 里没有 workspaceId 时默认归入 "default" 工作区。
+      workspaceId:
+        (data.appState as { workspaceId?: string } | undefined)?.workspaceId ||
+        "default",
     };
   }
 
@@ -152,5 +166,87 @@ export class BackendStorageAdapter implements IStorageAdapter {
     };
 
     await this.saveCanvas(id, updatedData);
+  }
+
+  async listWorkspaces(): Promise<WorkspaceMetadata[]> {
+    const response = await fetch(WORKSPACES_BASE_URL, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        // 未登录时当作没有工作区处理，避免弹错误提示。
+        return [];
+      }
+      throw new Error(`Failed to list workspaces: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async createWorkspace(
+    name: string,
+    note?: string,
+  ): Promise<WorkspaceMetadata> {
+    const response = await fetch(WORKSPACES_BASE_URL, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name, note }),
+    });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new AuthError("User is not authenticated");
+      }
+      throw new Error(`Failed to create workspace: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async updateWorkspace(
+    id: string,
+    patch: { name?: string; note?: string },
+  ): Promise<void> {
+    const response = await fetch(`${WORKSPACES_BASE_URL}/${id}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(patch),
+    });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new AuthError("User is not authenticated");
+      }
+      throw new Error(`Failed to update workspace: ${response.statusText}`);
+    }
+  }
+
+  async deleteWorkspace(id: string): Promise<void> {
+    const response = await fetch(`${WORKSPACES_BASE_URL}/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new AuthError("User is not authenticated");
+      }
+      throw new Error(`Failed to delete workspace: ${response.statusText}`);
+    }
+  }
+
+  async moveCanvasToWorkspace(
+    canvasId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/${canvasId}/workspace`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ workspaceId }),
+    });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new AuthError("User is not authenticated");
+      }
+      throw new Error(
+        `Failed to move canvas to workspace: ${response.statusText}`,
+      );
+    }
   }
 }

@@ -3,7 +3,12 @@ import { createStore, set, get, del, entries } from "idb-keyval";
 import { generateThumbnail } from "../thumbnail";
 import { randomUUID } from "../random";
 
-import type { CanvasData, CanvasMetadata, IStorageAdapter } from "../storage";
+import type {
+  CanvasData,
+  CanvasMetadata,
+  IStorageAdapter,
+  WorkspaceMetadata,
+} from "../storage";
 
 const metadataStore = createStore("excalidraw-canvases-metadata", "metadata");
 const dataStore = createStore("excalidraw-canvases-data", "data");
@@ -11,7 +16,11 @@ const dataStore = createStore("excalidraw-canvases-data", "data");
 export class IndexedDBStorageAdapter implements IStorageAdapter {
   async listCanvases(): Promise<CanvasMetadata[]> {
     const allEntries = await entries<string, CanvasMetadata>(metadataStore);
-    return allEntries.map(([, metadata]) => metadata);
+    return allEntries.map(([, metadata]) => ({
+      ...metadata,
+      // 兼容历史数据没有 workspaceId 的情况。
+      workspaceId: metadata.workspaceId || "default",
+    }));
   }
 
   async loadCanvas(id: string): Promise<CanvasData | null> {
@@ -35,6 +44,11 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
       name: data.appState.name || existingMetadata.name,
       updatedAt: new Date().toISOString(),
       thumbnail: data.elements.length > 0 ? thumbnail : undefined,
+      // 兼容历史数据没有 workspaceId 的情况。
+      workspaceId:
+        existingMetadata.workspaceId ||
+        (data.appState as { workspaceId?: string }).workspaceId ||
+        "default",
     };
 
     await set(id, updatedMetadata, metadataStore);
@@ -56,6 +70,8 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
       createdAt: now,
       updatedAt: now,
       thumbnail: data.elements.length > 0 ? thumbnail : undefined,
+      workspaceId:
+        (data.appState as { workspaceId?: string }).workspaceId || "default",
     };
 
     await set(newId, newMetadata, metadataStore);
@@ -91,5 +107,46 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
       },
       dataStore,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Workspaces 最小实现（IndexedDB 本地模式不常用工作区功能）：
+  // 统一返回空数组 / 默认值，moveCanvasToWorkspace 为 no-op，
+  // 仅保证 IStorageAdapter 类型完整。
+  // ---------------------------------------------------------------------------
+
+  async listWorkspaces(): Promise<WorkspaceMetadata[]> {
+    return [];
+  }
+
+  async createWorkspace(
+    _name: string,
+    _note?: string,
+  ): Promise<WorkspaceMetadata> {
+    throw new Error(
+      "Workspaces are not supported by the IndexedDB storage adapter.",
+    );
+  }
+
+  async updateWorkspace(
+    _id: string,
+    _patch: { name?: string; note?: string },
+  ): Promise<void> {
+    throw new Error(
+      "Workspaces are not supported by the IndexedDB storage adapter.",
+    );
+  }
+
+  async deleteWorkspace(_id: string): Promise<void> {
+    throw new Error(
+      "Workspaces are not supported by the IndexedDB storage adapter.",
+    );
+  }
+
+  async moveCanvasToWorkspace(
+    _canvasId: string,
+    _workspaceId: string,
+  ): Promise<void> {
+    // no-op：本地模式下画布没有工作区概念。
   }
 }

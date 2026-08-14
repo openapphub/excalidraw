@@ -4,7 +4,12 @@ import { dehydrateCanvasData, hydrateCanvasData } from "../storage";
 
 import { randomUUID } from "../random";
 
-import type { CanvasData, CanvasMetadata, IStorageAdapter } from "../storage";
+import type {
+  CanvasData,
+  CanvasMetadata,
+  IStorageAdapter,
+  WorkspaceMetadata,
+} from "../storage";
 
 const KEY_PREFIX_METADATA = "excalidraw-canvas-meta:";
 const KEY_PREFIX_DATA = "excalidraw-canvas-data:";
@@ -112,6 +117,11 @@ export class CloudflareKVAdapter implements IStorageAdapter {
       name: data.appState.name || existingMetadata.name,
       updatedAt: new Date().toISOString(),
       thumbnail: data.elements.length > 0 ? thumbnail : undefined,
+      // 兼容历史数据没有 workspaceId 的情况。
+      workspaceId:
+        existingMetadata.workspaceId ||
+        (data.appState as { workspaceId?: string }).workspaceId ||
+        "default",
     };
 
     const dehydratedData = dehydrateCanvasData(data);
@@ -145,6 +155,8 @@ export class CloudflareKVAdapter implements IStorageAdapter {
       createdAt: now,
       updatedAt: now,
       thumbnail: data.elements.length > 0 ? thumbnail : undefined,
+      workspaceId:
+        (data.appState as { workspaceId?: string }).workspaceId || "default",
     };
 
     const metadataKey = `${KEY_PREFIX_METADATA}${newId}`;
@@ -223,5 +235,46 @@ export class CloudflareKVAdapter implements IStorageAdapter {
     if (!response.ok) {
       throw new Error(`Failed to rename canvas ${id} in Cloudflare KV.`);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Workspaces 最小实现（Cloudflare KV 模式不常用工作区功能）：
+  // 统一返回空数组 / 默认值，moveCanvasToWorkspace 为 no-op，
+  // 仅保证 IStorageAdapter 类型完整。
+  // ---------------------------------------------------------------------------
+
+  async listWorkspaces(): Promise<WorkspaceMetadata[]> {
+    return [];
+  }
+
+  async createWorkspace(
+    _name: string,
+    _note?: string,
+  ): Promise<WorkspaceMetadata> {
+    throw new Error(
+      "Workspaces are not supported by the Cloudflare KV storage adapter.",
+    );
+  }
+
+  async updateWorkspace(
+    _id: string,
+    _patch: { name?: string; note?: string },
+  ): Promise<void> {
+    throw new Error(
+      "Workspaces are not supported by the Cloudflare KV storage adapter.",
+    );
+  }
+
+  async deleteWorkspace(_id: string): Promise<void> {
+    throw new Error(
+      "Workspaces are not supported by the Cloudflare KV storage adapter.",
+    );
+  }
+
+  async moveCanvasToWorkspace(
+    _canvasId: string,
+    _workspaceId: string,
+  ): Promise<void> {
+    // no-op：KV 模式下画布没有工作区概念。
   }
 }
