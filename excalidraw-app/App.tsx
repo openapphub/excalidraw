@@ -436,6 +436,10 @@ const ExcalidrawWrapper = () => {
 
   const [excalidrawAPI, excalidrawRefCallback] =
     useCallbackRefState<ExcalidrawImperativeAPI>();
+  const [collabAPI] = useAtom(collabAPIAtom);
+  const [isCollaborating] = useAtomWithInitialValue(isCollaboratingAtom, () => {
+    return isCollaborationLink(window.location.href);
+  });
 
   // Live-sync the AI canvas (ai-canvas) over WebSocket when it is open.
   useAiCanvasSync(excalidrawAPI, currentCanvasId);
@@ -453,6 +457,7 @@ const ExcalidrawWrapper = () => {
   } = useCanvasManagement({
     storageAdapter,
     excalidrawAPI,
+    collabAPI,
     setErrorMessage,
     resetSaveStatus,
   });
@@ -509,10 +514,6 @@ const ExcalidrawWrapper = () => {
   }, []);
 
   const [, setShareDialogState] = useAtom(shareDialogStateAtom);
-  const [collabAPI] = useAtom(collabAPIAtom);
-  const [isCollaborating] = useAtomWithInitialValue(isCollaboratingAtom, () => {
-    return isCollaborationLink(window.location.href);
-  });
   const collabError = useAtomValue(collabErrorIndicatorAtom);
 
   useHandleLibrary({
@@ -940,20 +941,24 @@ const ExcalidrawWrapper = () => {
           // without it, so an open canvas can never overwrite a different
           // canvas that the AI is currently working on.
           if (currentCanvasId.startsWith("ai-")) {
-            try {
-              const payload = {
-                elements: elements.map((el) => ({ ...el })),
-              };
-              await fetch(
-                `/api/elements/sync?canvasId=${encodeURIComponent(currentCanvasId)}`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payload),
-                },
+            const payload = {
+              elements: elements.map((el) => ({ ...el })),
+            };
+            const response = await fetch(
+              `/api/elements/sync?canvasId=${encodeURIComponent(
+                currentCanvasId,
+              )}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              },
+            );
+            if (!response.ok) {
+              const errorBody = await response.text();
+              throw new Error(
+                `AI canvas sync failed (${response.status}): ${errorBody}`,
               );
-            } catch (e) {
-              console.error("AI canvas sync failed:", e);
             }
           }
           setSaveStatus("saved");

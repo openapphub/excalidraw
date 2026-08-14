@@ -43,6 +43,8 @@ import type {
   OrderedExcalidrawElement,
 } from "@excalidraw/element/types";
 import type {
+  AppState,
+  BinaryFiles,
   BinaryFileData,
   ExcalidrawImperativeAPI,
   SocketId,
@@ -119,6 +121,8 @@ export interface CollabAPI {
   onPointerUpdate: CollabInstance["onPointerUpdate"];
   startCollaboration: CollabInstance["startCollaboration"];
   stopCollaboration: CollabInstance["stopCollaboration"];
+  saveCollaboration: CollabInstance["saveCollaboration"];
+  replaceScene: CollabInstance["replaceScene"];
   syncElements: CollabInstance["syncElements"];
   fetchImageFilesFromFirebase: CollabInstance["fetchImageFilesFromFirebase"];
   setUsername: CollabInstance["setUsername"];
@@ -141,6 +145,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
   private socketInitializationTimer?: number;
   private lastBroadcastedOrReceivedSceneVersion: number = -1;
+  private isReplacingScene = false;
   private collaborators = new Map<SocketId, Collaborator>();
   /** the socket ids of the users following the current user */
   private followedBy = new Set<SocketId>();
@@ -238,6 +243,8 @@ class Collab extends PureComponent<CollabProps, CollabState> {
       isCollaborating: this.isCollaborating,
       onPointerUpdate: this.onPointerUpdate,
       startCollaboration: this.startCollaboration,
+      saveCollaboration: this.saveCollaboration,
+      replaceScene: this.replaceScene,
       syncElements: this.syncElements,
       fetchImageFilesFromFirebase: this.fetchImageFilesFromFirebase,
       stopCollaboration: this.stopCollaboration,
@@ -283,6 +290,14 @@ class Collab extends PureComponent<CollabProps, CollabState> {
       window.clearTimeout(this.idleTimeoutId);
       this.idleTimeoutId = null;
     }
+    if (this.socketInitializationTimer) {
+      window.clearTimeout(this.socketInitializationTimer);
+      this.socketInitializationTimer = undefined;
+    }
+    this.queueBroadcastAllElements.cancel();
+    this.queueSaveToFirebase.cancel();
+    this.loadImageFiles.cancel();
+    this.destroySocketClient();
     this.onUmmount?.();
   }
 
@@ -322,6 +337,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
   saveCollabRoomToFirebase = async (
     syncableElements: readonly SyncableExcalidrawElement[],
+    opts?: { replace?: boolean },
   ) => {
     syncableElements = cloneJSON(syncableElements);
     try {
@@ -329,11 +345,12 @@ class Collab extends PureComponent<CollabProps, CollabState> {
         this.portal,
         syncableElements,
         this.excalidrawAPI.getAppState(),
+        opts,
       );
 
       this.resetErrorIndicator();
 
-      if (this.isCollaborating() && storedElements) {
+      if (this.isCollaborating() && storedElements && !opts?.replace) {
         this.handleRemoteSceneUpdate(this._reconcileElements(storedElements));
       }
     } catch (error: any) {
@@ -360,6 +377,62 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
       console.error(error);
     }
+  };
+
+  saveCollaboration = async () => {
+    await this.saveCollabRoomToFirebase(
+      getSyncableElements(
+        this.excalidrawAPI.getSceneElementsIncludingDeleted(),
+      ),
+    );
+  };
+
+  replaceScene = async ({
+    elements,
+    appState,
+    files,
+  }: {
+    elements: NonNullable<ImportedDataState["elements"]>;
+    appState: Omit<AppState, "width" | "height" | "offsetTop" | "offsetLeft">;
+    files: BinaryFiles;
+  }) => {
+    this.queueBroadcastAllElements.cancel();
+    this.queueSaveToFirebase.cancel();
+    this.loadImageFiles.cancel();
+    this.portal.queueFileUpload.cancel();
+    this.fileManager.reset();
+
+    this.isReplacingScene = true;
+    try {
+      this.excalidrawAPI.resetScene();
+      this.excalidrawAPI.addFiles(Object.values(files));
+      this.excalidrawAPI.updateScene({
+        elements,
+        appState,
+        captureUpdate: CaptureUpdateAction.NEVER,
+      });
+    } finally {
+      this.isReplacingScene = false;
+    }
+
+    const replacementElements =
+      this.excalidrawAPI.getSceneElementsIncludingDeleted();
+    this.portal.broadcastedElementVersions = new Map();
+    this.setLastBroadcastedOrReceivedSceneVersion(
+      getSceneVersion(replacementElements),
+    );
+
+    const syncableReplacementElements =
+      getSyncableElements(replacementElements);
+    await this.portal.broadcastScene(
+      WS_SUBTYPES.INIT,
+      syncableReplacementElements,
+      true,
+      { replace: true },
+    );
+    await this.saveCollabRoomToFirebase(syncableReplacementElements, {
+      replace: true,
+    });
   };
 
   stopCollaboration = (keepRemoteState = true) => {
@@ -592,11 +665,12 @@ class Collab extends PureComponent<CollabProps, CollabState> {
           case WS_SUBTYPES.INVALID_RESPONSE:
             return;
           case WS_SUBTYPES.INIT: {
+            const remoteElements = toBrandedType<
+              readonly RemoteExcalidrawElement[]
+            >(decryptedData.payload.elements);
+
             if (!this.portal.socketInitialized) {
               this.initializeRoom({ fetchScene: false });
-              const remoteElements = toBrandedType<
-                readonly RemoteExcalidrawElement[]
-              >(decryptedData.payload.elements);
               const reconciledElements =
                 this._reconcileElements(remoteElements);
               this.handleRemoteSceneUpdate(reconciledElements);
@@ -605,6 +679,8 @@ class Collab extends PureComponent<CollabProps, CollabState> {
                 elements: reconciledElements,
                 scrollToContent: true,
               });
+            } else if (decryptedData.payload.replace) {
+              this.handleRemoteSceneReplace(remoteElements);
             }
             break;
           }
@@ -818,6 +894,35 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     this.loadImageFiles();
   };
 
+  private handleRemoteSceneReplace = (
+    remoteElements: readonly RemoteExcalidrawElement[],
+  ) => {
+    const elements = restoreElements(remoteElements, null, {
+      repairBindings: true,
+    });
+
+    this.queueBroadcastAllElements.cancel();
+    this.queueSaveToFirebase.cancel();
+    this.loadImageFiles.cancel();
+    this.portal.queueFileUpload.cancel();
+    this.portal.broadcastedElementVersions = new Map();
+    this.fileManager.reset();
+    this.setLastBroadcastedOrReceivedSceneVersion(getSceneVersion(elements));
+
+    this.isReplacingScene = true;
+    try {
+      this.excalidrawAPI.resetScene();
+      this.excalidrawAPI.updateScene({
+        elements,
+        captureUpdate: CaptureUpdateAction.NEVER,
+      });
+    } finally {
+      this.isReplacingScene = false;
+    }
+
+    this.loadImageFiles();
+  };
+
   private onPointerMove = () => {
     if (this.idleTimeoutId) {
       window.clearTimeout(this.idleTimeoutId);
@@ -969,6 +1074,9 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   };
 
   syncElements = (elements: readonly OrderedExcalidrawElement[]) => {
+    if (this.isReplacingScene) {
+      return;
+    }
     this.broadcastElements(elements);
     this.queueSaveToFirebase();
   };

@@ -205,6 +205,7 @@ export const saveToFirebase = async (
   portal: Portal,
   elements: readonly SyncableExcalidrawElement[],
   appState: AppState,
+  opts?: { replace?: boolean },
 ) => {
   const { roomId, roomKey, socket } = portal;
   if (
@@ -212,7 +213,7 @@ export const saveToFirebase = async (
     !roomId ||
     !roomKey ||
     !socket ||
-    isSavedToFirebase(portal, elements)
+    (!opts?.replace && isSavedToFirebase(portal, elements))
   ) {
     return null;
   }
@@ -223,10 +224,14 @@ export const saveToFirebase = async (
   const storedScene = await runTransaction(firestore, async (transaction) => {
     const snapshot = await transaction.get(docRef);
 
-    if (!snapshot.exists()) {
+    if (!snapshot.exists() || opts?.replace) {
       const storedScene = await createFirebaseSceneDocument(elements, roomKey);
 
-      transaction.set(docRef, storedScene);
+      if (snapshot.exists()) {
+        transaction.update(docRef, storedScene);
+      } else {
+        transaction.set(docRef, storedScene);
+      }
 
       return storedScene;
     }

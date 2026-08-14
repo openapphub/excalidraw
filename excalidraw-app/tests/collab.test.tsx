@@ -13,6 +13,7 @@ import { StoreIncrement } from "@excalidraw/element";
 import type { DurableIncrement, EphemeralIncrement } from "@excalidraw/element";
 
 import ExcalidrawApp from "../App";
+import { WS_SUBTYPES } from "../app_constants";
 
 const { h } = window;
 
@@ -69,6 +70,56 @@ vi.mock("socket.io-client", () => {
  * i.e. multiplayer history tests could be a good first candidate, as we could test both history stacks simultaneously.
  */
 describe("collaboration", () => {
+  it("should replace the scene and broadcast a full replacement init", async () => {
+    await render(<ExcalidrawApp />);
+
+    const previousElement = API.createElement({
+      type: "rectangle",
+      id: "previous",
+      width: 100,
+      height: 100,
+    });
+    const targetElement = API.createElement({
+      type: "diamond",
+      id: "target",
+      width: 200,
+      height: 120,
+    });
+
+    API.updateScene({
+      elements: [previousElement],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+
+    const broadcastSpy = vi
+      .spyOn(window.collab.portal, "_broadcastSocketData")
+      .mockResolvedValue(undefined);
+    const saveSpy = vi
+      .spyOn(window.collab, "saveCollabRoomToFirebase")
+      .mockResolvedValue(undefined);
+
+    await act(async () => {
+      await window.collab.replaceScene({
+        elements: [targetElement],
+        appState: window.collab.excalidrawAPI.getAppState(),
+        files: {},
+      });
+    });
+
+    expect(h.elements).toEqual([expect.objectContaining({ id: "target" })]);
+    expect(broadcastSpy).toHaveBeenCalledWith({
+      type: WS_SUBTYPES.INIT,
+      payload: {
+        elements: [expect.objectContaining({ id: "target" })],
+        replace: true,
+      },
+    });
+    expect(saveSpy).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: "target" })],
+      { replace: true },
+    );
+  });
+
   it("should emit two ephemeral increments even though updates get batched", async () => {
     const durableIncrements: DurableIncrement[] = [];
     const ephemeralIncrements: EphemeralIncrement[] = [];

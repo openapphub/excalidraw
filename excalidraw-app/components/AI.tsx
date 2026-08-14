@@ -83,6 +83,26 @@ const buildOpenAIPayload = (
   };
 };
 
+const buildChatCompletionsURL = (baseURL: string) => {
+  const trimmed = baseURL.trim();
+  const queryIndex = trimmed.indexOf("?");
+  const path = queryIndex === -1 ? trimmed : trimmed.slice(0, queryIndex);
+  const query = queryIndex === -1 ? "" : trimmed.slice(queryIndex);
+  const normalizedPath = path.replace(/\/+$/, "");
+  const endpointBase = /^https?:\/\/[^/]+$/i.test(normalizedPath)
+    ? `${normalizedPath}/v1`
+    : normalizedPath;
+
+  return `${
+    endpointBase.endsWith("/chat/completions")
+      ? endpointBase
+      : `${endpointBase}/chat/completions`
+  }${query}`;
+};
+
+const aiAuthorizationHeader = (apiKey: string): Record<string, string> =>
+  apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+
 export const AIComponents = ({
   excalidrawAPI,
 }: {
@@ -169,8 +189,7 @@ export const AIComponents = ({
             ],
           };
 
-          const url = `${apiURL}/chat/completions`;
-          const isRelativePath = url.startsWith("/");
+          const url = buildChatCompletionsURL(apiURL);
           // Mixed-content workaround: when the page is served over http and
           // the AI base URL is https, the browser blocks the direct fetch.
           // Route through the local Go proxy (/api/v2/chat/completions) and
@@ -186,16 +205,8 @@ export const AIComponents = ({
             headers: {
               Accept: "application/json",
               "Content-Type": "application/json",
-              ...(isMixedContent
-                ? { "X-AI-Base-URL": apiURL }
-                : {}),
-              Authorization: `Bearer ${
-                isMixedContent
-                  ? apiKey // mixed-content path: send the user's OpenAI key
-                  : isRelativePath
-                    ? localStorage.getItem("token") || apiKey
-                    : apiKey
-              }`,
+              ...(isMixedContent ? { "X-AI-Base-URL": apiURL } : {}),
+              ...aiAuthorizationHeader(apiKey),
             },
             body: JSON.stringify(body),
           });
@@ -264,8 +275,7 @@ export const AIComponents = ({
               import.meta.env.VITE_APP_OPENAI_MODEL ||
               "gpt-4o-mini";
             const payload = buildOpenAIPayload(messages, modelName);
-            const url = `${apiUrl}/chat/completions`;
-            const isRelativePath = url.startsWith("/");
+            const url = buildChatCompletionsURL(apiUrl);
             // Mixed-content workaround (same as diagram-to-code above):
             // route https AI targets through the local Go proxy.
             const isMixedContent =
@@ -278,13 +288,7 @@ export const AIComponents = ({
               headers: {
                 "Content-Type": "application/json",
                 ...(isMixedContent ? { "X-AI-Base-URL": apiUrl } : {}),
-                Authorization: `Bearer ${
-                  isMixedContent
-                    ? apiKey // mixed-content path: user's OpenAI key
-                    : isRelativePath
-                      ? localStorage.getItem("token") || apiKey
-                      : apiKey
-                }`,
+                ...aiAuthorizationHeader(apiKey),
               },
               body: JSON.stringify(payload),
             });
@@ -319,8 +323,7 @@ export const AIComponents = ({
               }
               const errorData = await response.json();
               throw new RequestError({
-                message:
-                  errorData.error.message || "OpenAI API request failed",
+                message: errorData.error.message || "OpenAI API request failed",
                 status: response.status,
               });
             }

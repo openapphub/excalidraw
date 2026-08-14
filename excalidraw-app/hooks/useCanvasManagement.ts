@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
+import { restoreAppState } from "@excalidraw/excalidraw/data/restore";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
@@ -10,6 +11,7 @@ import { useAtom, currentCanvasIdAtom } from "../app-jotai";
 
 import { CREATIONS_SIDEBAR_NAME } from "../app_constants";
 
+import type { CollabAPI } from "../collab/Collab";
 import type {
   IStorageAdapter,
   CanvasMetadata,
@@ -19,11 +21,13 @@ import type {
 export const useCanvasManagement = ({
   storageAdapter,
   excalidrawAPI,
+  collabAPI,
   setErrorMessage,
   resetSaveStatus,
 }: {
   storageAdapter: IStorageAdapter;
   excalidrawAPI: ExcalidrawImperativeAPI | null | undefined;
+  collabAPI: CollabAPI | null;
   setErrorMessage: (msg: string) => void;
   resetSaveStatus: () => void;
 }) => {
@@ -60,16 +64,53 @@ export const useCanvasManagement = ({
         return;
       }
       try {
+        if (id === currentCanvasId) {
+          excalidrawAPI.updateScene({ appState: { openSidebar: null } });
+          return;
+        }
+
+        const isCollaborating = collabAPI?.isCollaborating() ?? false;
+
+        if (isCollaborating && collabAPI) {
+          await collabAPI.saveCollaboration();
+        }
+
+        // 必须用切换前捕获的画布 ID 保存，避免异步回调把旧场景写入目标画布。
+        if (currentCanvasId) {
+          await storageAdapter.saveCanvas(currentCanvasId, {
+            elements: excalidrawAPI.getSceneElements(),
+            appState: excalidrawAPI.getAppState(),
+            files: excalidrawAPI.getFiles(),
+          });
+        }
+
         const canvasData = await storageAdapter.loadCanvas(id);
         if (canvasData) {
-          excalidrawAPI.updateScene({ appState: { openSidebar: null } });
-          excalidrawAPI.addFiles(Object.values(canvasData.files));
-          excalidrawAPI.updateScene({
-            elements: canvasData.elements,
-            appState: canvasData.appState,
-            captureUpdate: CaptureUpdateAction.NEVER,
-          });
+          const currentAppState = excalidrawAPI.getAppState();
+          const nextAppState = {
+            ...restoreAppState(canvasData.appState, currentAppState),
+            collaborators: currentAppState.collaborators,
+            openSidebar: null,
+          };
+
           setCurrentCanvasId(id);
+
+          if (isCollaborating && collabAPI) {
+            await collabAPI.replaceScene({
+              elements: canvasData.elements,
+              appState: nextAppState,
+              files: canvasData.files,
+            });
+          } else {
+            excalidrawAPI.resetScene();
+            excalidrawAPI.addFiles(Object.values(canvasData.files));
+            excalidrawAPI.updateScene({
+              elements: canvasData.elements,
+              appState: nextAppState,
+              captureUpdate: CaptureUpdateAction.NEVER,
+            });
+          }
+
           resetSaveStatus();
         }
       } catch (error) {
@@ -79,8 +120,10 @@ export const useCanvasManagement = ({
     [
       storageAdapter,
       excalidrawAPI,
+      collabAPI,
       setErrorMessage,
       setCurrentCanvasId,
+      currentCanvasId,
       resetSaveStatus,
     ],
   );

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
+
 import { CaptureUpdateAction } from "@excalidraw/excalidraw";
+
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 /**
@@ -26,13 +28,18 @@ export function useAiCanvasSync(
   canvasIdRef.current = currentCanvasId;
 
   useEffect(() => {
-    if (!currentCanvasId || !currentCanvasId.startsWith(AI_CANVAS_PREFIX) || !excalidrawAPI) {
+    if (
+      !currentCanvasId ||
+      !currentCanvasId.startsWith(AI_CANVAS_PREFIX) ||
+      !excalidrawAPI
+    ) {
       return;
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     let closed = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     const applyElements = (elements: any[]) => {
       const api = apiRef.current;
@@ -62,11 +69,24 @@ export function useAiCanvasSync(
       });
     };
 
-    ws.onopen = () => {
-      // Server pushes initial_elements on connect.
+    const removeElements = (elementIds: string[]) => {
+      if (elementIds.length === 0) {
+        return;
+      }
+      const api = apiRef.current;
+      if (!api) {
+        return;
+      }
+      const removed = new Set(elementIds);
+      api.updateScene({
+        elements: api
+          .getSceneElements()
+          .filter((element: any) => !removed.has(element.id)),
+        captureUpdate: CaptureUpdateAction.NEVER,
+      });
     };
 
-    ws.onmessage = (event) => {
+    const handleMessage = (event: MessageEvent<string>) => {
       let data: any;
       try {
         data = JSON.parse(event.data);
@@ -84,7 +104,7 @@ export function useAiCanvasSync(
       }
       switch (data.type) {
         case "initial_elements":
-          if (data.elements && data.elements.length > 0) {
+          if (Array.isArray(data.elements)) {
             api.updateScene({
               elements: data.elements,
               captureUpdate: CaptureUpdateAction.NEVER,
@@ -93,8 +113,13 @@ export function useAiCanvasSync(
           break;
         case "element_created":
         case "element_updated":
-          if (data.element) {
+          if (Array.isArray(data.elements)) {
+            applyElements(data.elements);
+          } else if (data.element) {
             applyElements([data.element]);
+          }
+          if (Array.isArray(data.removedElementIds)) {
+            removeElements(data.removedElementIds);
           }
           break;
         case "elements_batch_created":
@@ -114,16 +139,12 @@ export function useAiCanvasSync(
           }
           break;
         case "element_deleted":
-        if (data.elementId) {
-          const filtered = api
-            .getSceneElements()
-            .filter((el: any) => el.id !== data.elementId);
-          api.updateScene({
-            elements: filtered,
-            captureUpdate: CaptureUpdateAction.NEVER,
-          });
-        }
-        break;
+          if (Array.isArray(data.elementIds)) {
+            removeElements(data.elementIds);
+          } else if (data.elementId) {
+            removeElements([data.elementId]);
+          }
+          break;
         case "canvas_cleared":
           api.updateScene({
             elements: [],
@@ -135,36 +156,39 @@ export function useAiCanvasSync(
       }
     };
 
-    ws.onclose = () => {
-      if (!closed) {
-        // Reconnect after 3s.
-        setTimeout(() => {
-          if (apiRef.current) {
-            // Re-run effect by toggling a state is complex; simplest is to
-            // re-create the connection via a recursive call.
-            reconnect();
-          }
-        }, 3000);
-      }
-    };
-
-    const reconnect = () => {
+    const connect = () => {
       if (closed) {
         return;
       }
-      const api = apiRef.current;
-      if (!api) {
-        return;
-      }
-      const ws2 = new WebSocket(`${protocol}//${window.location.host}/ws`);
-      ws2.onmessage = ws.onmessage;
-      ws2.onclose = ws.onclose;
-      ws2.onopen = ws.onopen;
+      const nextSocket = new WebSocket(
+        `${protocol}//${window.location.host}/ws`,
+      );
+      socket = nextSocket;
+      nextSocket.onmessage = handleMessage;
+      nextSocket.onclose = () => {
+        if (socket === nextSocket) {
+          socket = null;
+        }
+        if (!closed && reconnectTimer === null) {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+          }, 3000);
+        }
+      };
     };
+
+    connect();
 
     return () => {
       closed = true;
-      ws.close();
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      const activeSocket = socket;
+      socket = null;
+      activeSocket?.close();
     };
   }, [currentCanvasId, excalidrawAPI]);
 }

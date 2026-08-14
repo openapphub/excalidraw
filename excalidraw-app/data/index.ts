@@ -88,6 +88,8 @@ export type SocketUpdateDataSource = {
     type: WS_SUBTYPES.INIT;
     payload: {
       elements: readonly ExcalidrawElement[];
+      /** 完整替换已初始化协作客户端的当前场景。 */
+      replace?: boolean;
     };
   };
   SCENE_UPDATE: {

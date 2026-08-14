@@ -13,6 +13,7 @@ import type {
 
 import { WS_EVENTS, FILE_UPLOAD_TIMEOUT, WS_SUBTYPES } from "../app_constants";
 import { isSyncableElement } from "../data";
+import { randomUUID } from "../data/random";
 
 import type {
   SocketUpdateData,
@@ -22,12 +23,31 @@ import type {
 import type { TCollabClass } from "./Collab";
 import type { Socket } from "socket.io-client";
 
+const COLLAB_CLIENT_ID_STORAGE_KEY = "excalidraw-collab-client-id";
+
+const getCollabClientId = () => {
+  try {
+    const existing = window.sessionStorage.getItem(
+      COLLAB_CLIENT_ID_STORAGE_KEY,
+    );
+    if (existing) {
+      return existing;
+    }
+    const clientId = randomUUID();
+    window.sessionStorage.setItem(COLLAB_CLIENT_ID_STORAGE_KEY, clientId);
+    return clientId;
+  } catch {
+    return randomUUID();
+  }
+};
+
 class Portal {
   collab: TCollabClass;
   socket: Socket | null = null;
   socketInitialized: boolean = false; // we don't want the socket to emit any updates until it is fully initialized
   roomId: string | null = null;
   roomKey: string | null = null;
+  clientId: string = getCollabClientId();
   broadcastedElementVersions: Map<string, number> = new Map();
 
   constructor(collab: TCollabClass) {
@@ -42,7 +62,7 @@ class Portal {
     // Initialize socket listeners
     this.socket.on("init-room", () => {
       if (this.socket) {
-        this.socket.emit("join-room", this.roomId);
+        this.socket.emit("join-room", this.roomId, this.clientId);
         trackEvent("share", "room joined");
       }
     });
@@ -143,6 +163,7 @@ class Portal {
     updateType: WS_SUBTYPES.INIT | WS_SUBTYPES.UPDATE,
     elements: readonly OrderedExcalidrawElement[],
     syncAll: boolean,
+    opts?: { replace?: boolean },
   ) => {
     if (updateType === WS_SUBTYPES.INIT && !syncAll) {
       throw new Error("syncAll must be true when sending SCENE.INIT");
@@ -167,6 +188,9 @@ class Portal {
       type: updateType,
       payload: {
         elements: syncableElements,
+        ...(updateType === WS_SUBTYPES.INIT && opts?.replace
+          ? { replace: true }
+          : {}),
       },
     };
 
