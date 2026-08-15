@@ -1,0 +1,327 @@
+// SlidesLayoutDialog - 幻灯片布局对话框
+// 从 AstraDraw CSS Module 转为普通 scss
+
+.slides-layout-dialog {
+  padding: 0 8px;
+
+  &__description {
+    margin: 0 0 16px;
+    font-size: 14px;
+    color: var(--text-primary-color, #1b1b1f);
+    line-height: 1.5;
+  }
+
+  &__order-note {
+    margin: 0 0 20px;
+    font-size: 14px;
+    color: var(--text-primary-color, #1b1b1f);
+    line-height: 1.5;
+  }
+
+  &__order-note-sub {
+    font-size: 13px;
+    color: var(--text-secondary-color, #6b6b6b);
+  }
+
+  &__options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  &__option {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    border: 2px solid var(--default-border-color, #e5e5e5);
+    background: var(--island-bg-color, #fff);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    overflow: hidden;
+
+    &:hover {
+      border-color: var(--color-primary-light, #a8c7fa);
+    }
+  }
+
+  &__option--selected {
+    border-color: var(--color-primary, #4a6ee0);
+    box-shadow: 0 0 0 2px var(--color-primary-light, rgba(74, 110, 224, 0.2));
+  }
+
+  &__option-preview {
+    padding: 16px;
+    background: var(--button-hover-bg, #f5f5f5);
+  }
+
+  &__mock-window {
+    background: var(--island-bg-color, #fff);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  &__window-dots {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--button-hover-bg, #f0f0f0);
+  }
+
+  &__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+
+    &--red { background: #ff5f57; }
+    &--yellow { background: #ffbd2e; }
+    &--green { background: #28c940; }
+  }
+
+  &__mock-frames {
+    display: flex;
+    padding: 12px;
+    gap: 8px;
+
+    &--row {
+      flex-direction: row;
+      justify-content: center;
+    }
+
+    &--column {
+      flex-direction: column;
+      align-items: center;
+    }
+
+    &--grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+  }
+
+  &__mock-frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: rgba(74, 110, 224, 0.1);
+    border: 1px solid rgba(74, 110, 224, 0.3);
+    border-radius: 4px;
+  }
+
+  &__mock-shape {
+    width: 20px;
+    height: 20px;
+
+    &--circle { background: #c084fc; border-radius: 50%; }
+    &--square { background: #f472b6; border-radius: 2px; }
+    &--triangle {
+      width: 0;
+      height: 0;
+      border-left: 10px solid transparent;
+      border-right: 10px solid transparent;
+      border-bottom: 18px solid #34d399;
+    }
+    &--star { background: #fbbf24; border-radius: 50%; }
+    &--diamond {
+      background: #60a5fa;
+      transform: rotate(45deg);
+      border-radius: 2px;
+      width: 14px;
+      height: 14px;
+    }
+    &--hexagon { background: #2dd4bf; border-radius: 50%; }
+  }
+
+  &__option-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--default-border-color, #e5e5e5);
+  }
+
+  &__option-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-primary, #4a6ee0);
+  }
+
+  &__option-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: var(--color-primary, #4a6ee0);
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+  }
+
+  &__column-count {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0;
+    border-top: 1px solid var(--default-border-color, #e5e5e5);
+    margin-bottom: 16px;
+  }
+
+  &__column-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary-color, #1b1b1f);
+  }
+
+  &__column-description {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-secondary-color, #6b6b6b);
+  }
+
+  &__column-select {
+    padding: 8px 32px 8px 12px;
+    font-size: 14px;
+    border: 1px solid var(--default-border-color, #e5e5e5);
+    border-radius: 6px;
+    background: var(--island-bg-color, #fff);
+    color: var(--text-primary-color, #1b1b1f);
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b6b6b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-primary, #4a6ee0);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--default-border-color, #e5e5e5);
+  }
+
+  &__button {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+
+    &--secondary {
+      background: transparent;
+      border: none;
+      color: var(--color-primary, #4a6ee0);
+
+      &:hover {
+        background: var(--button-hover-bg, rgba(74, 110, 224, 0.1));
+      }
+    }
+
+    &--primary {
+      background: var(--color-primary, #4a6ee0);
+      border: none;
+      color: white;
+
+      &:hover {
+        background: var(--color-primary-darker, #3a5ecc);
+      }
+    }
+  }
+}
+
+// Dark mode
+.excalidraw.theme--dark {
+  .slides-layout-dialog__description,
+  .slides-layout-dialog__order-note {
+    color: var(--text-primary-color, #f1f1f1);
+  }
+
+  .slides-layout-dialog__order-note-sub,
+  .slides-layout-dialog__column-description {
+    color: var(--text-secondary-color, #9a9a9a);
+  }
+
+  .slides-layout-dialog__option {
+    border-color: var(--default-border-color, #3d3d4a);
+    background: var(--island-bg-color, #232329);
+
+    &:hover {
+      border-color: var(--color-primary-light, #a8c7fa);
+    }
+  }
+
+  .slides-layout-dialog__option--selected {
+    border-color: var(--color-primary, #4a6ee0);
+  }
+
+  .slides-layout-dialog__option-preview {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .slides-layout-dialog__mock-window {
+    background: var(--island-bg-color, #2a2a32);
+  }
+
+  .slides-layout-dialog__window-dots {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .slides-layout-dialog__mock-frame {
+    background: rgba(74, 110, 224, 0.15);
+    border-color: rgba(74, 110, 224, 0.4);
+  }
+
+  .slides-layout-dialog__option-label {
+    border-color: var(--default-border-color, #3d3d4a);
+  }
+
+  .slides-layout-dialog__option-name {
+    color: var(--color-primary-light, #a8c7fa);
+  }
+
+  .slides-layout-dialog__column-count {
+    border-color: var(--default-border-color, #3d3d4a);
+  }
+
+  .slides-layout-dialog__column-label {
+    color: var(--text-primary-color, #f1f1f1);
+  }
+
+  .slides-layout-dialog__column-select {
+    border-color: var(--default-border-color, #3d3d4a);
+    background-color: var(--island-bg-color, #232329);
+    color: var(--text-primary-color, #f1f1f1);
+  }
+
+  .slides-layout-dialog__actions {
+    border-color: var(--default-border-color, #3d3d4a);
+  }
+
+  .slides-layout-dialog__button--secondary {
+    color: var(--color-primary-light, #a8c7fa);
+
+    &:hover {
+      background: rgba(168, 199, 250, 0.1);
+    }
+  }
+}

@@ -1,0 +1,123 @@
+// PresentationControls - 演示模式控制栏
+// 从 AstraDraw CSS Module 转为普通 scss（本仓约定）
+
+.presentation-controls {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  transition: opacity 0.5s ease-in-out;
+
+  &--hidden {
+    opacity: 0;
+    pointer-events: auto;
+    transition: opacity 0.8s ease-out;
+
+    &:hover {
+      opacity: 1;
+      transition: opacity 0.15s ease-in;
+    }
+  }
+
+  &__bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    background: var(--island-bg-color, #fff);
+    border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--default-border-color, #e5e5e5);
+  }
+
+  &__button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 8px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-primary-color, #1b1b1f);
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    &--end {
+      background: #fee8e8;
+      color: #d32f2f;
+      padding: 0 16px;
+      font-size: 14px;
+      font-weight: 500;
+
+      &:hover {
+        background: #fdcece;
+      }
+    }
+  }
+
+  &__counter {
+    padding: 0 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary-color, #1b1b1f);
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  &__divider {
+    width: 1px;
+    height: 24px;
+    margin: 0 4px;
+    background: var(--default-border-color, #e5e5e5);
+  }
+}
+
+// Dark mode
+.excalidraw.theme--dark {
+  .presentation-controls__bar {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d4a);
+  }
+
+  .presentation-controls__button {
+    color: var(--text-primary-color, #f1f1f1);
+
+    &:hover:not(:disabled) {
+      background: var(--button-hover-bg, rgba(255, 255, 255, 0.1));
+    }
+
+    &--end {
+      background: rgba(211, 47, 47, 0.2);
+      color: #f48fb1;
+
+      &:hover {
+        background: rgba(211, 47, 47, 0.3);
+      }
+    }
+  }
+
+  .presentation-controls__counter {
+    color: var(--text-primary-color, #f1f1f1);
+  }
+
+  .presentation-controls__divider {
+    background: var(--default-border-color, #3d3d4a);
+  }
+}
