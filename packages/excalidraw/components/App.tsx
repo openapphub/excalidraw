@@ -426,9 +426,13 @@ import {
   createChartElements,
   createChartSpec,
   getChartElements,
+  getChartHit,
   getChartSpec,
+  buildChartHoverContent,
+  isInteractiveChartType,
   tryParseSpreadsheet,
   type ChartSpec,
+  type InteractiveChartType,
 } from "../charts";
 
 import ConvertElementTypePopup, {
@@ -674,7 +678,7 @@ class App extends React.Component<AppProps, AppState> {
   private _initialized = false;
 
   /** 工具栏拖放图表时暂存类型，供 onDrop 回退读取 */
-  public pendingChartInsert: "bar" | "line" | null = null;
+  public pendingChartInsert: InteractiveChartType | null = null;
 
   private readonly editorLifecycleEvents = new AppEventBus<
     ExcalidrawImperativeAPIEventMap,
@@ -2721,7 +2725,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   public insertChart = (
-    type: "bar" | "line",
+    type: InteractiveChartType,
     position:
       | { clientX: number; clientY: number }
       | "cursor"
@@ -2787,6 +2791,69 @@ class App extends React.Component<AppProps, AppState> {
         this.state,
       ),
       editingChart: { chartId: spec.id },
+      chartHover: null,
+    });
+  };
+
+  private clearChartHover = () => {
+    if (this.state.chartHover) {
+      this.setState({ chartHover: null });
+    }
+  };
+
+  private updateChartHoverTooltip = (
+    hitElement: NonDeletedExcalidrawElement | null,
+    clientX: number,
+    clientY: number,
+  ) => {
+    if (
+      this.state.activeTool.type !== this.state.preferredSelectionTool.type ||
+      this.state.selectedElementsAreBeingDragged ||
+      this.state.newElement ||
+      this.state.resizingElement ||
+      this.state.editingTextElement ||
+      this.state.editingChart ||
+      this.state.openMenu ||
+      this.state.contextMenu
+    ) {
+      this.clearChartHover();
+      return;
+    }
+
+    const spec = getChartSpec(hitElement);
+    const hit = getChartHit(hitElement);
+    if (!spec || !hit) {
+      this.clearChartHover();
+      return;
+    }
+
+    const content = buildChartHoverContent(spec, hit);
+    this.setState((prevState) => {
+      const prev = prevState.chartHover;
+      if (
+        prev &&
+        prev.label === content.label &&
+        prev.categoryIndex === content.categoryIndex &&
+        prev.seriesIndex === content.seriesIndex &&
+        prev.rows.length === content.rows.length &&
+        prev.rows.every(
+          (row, index) =>
+            row.title === content.rows[index].title &&
+            row.value === content.rows[index].value &&
+            row.active === content.rows[index].active,
+        ) &&
+        Math.abs(prev.clientX - clientX) < 4 &&
+        Math.abs(prev.clientY - clientY) < 4
+      ) {
+        return null;
+      }
+      return {
+        chartHover: {
+          ...content,
+          clientX,
+          clientY,
+        },
+      };
     });
   };
 
@@ -7691,6 +7758,7 @@ class App extends React.Component<AppProps, AppState> {
       isDraggingScrollBar ||
       isHandToolActive(this.state)
     ) {
+      this.clearChartHover();
       return;
     }
 
@@ -8217,6 +8285,8 @@ class App extends React.Component<AppProps, AppState> {
         hoveredElementIds: updateStable(prevState.hoveredElementIds, {}),
       }));
     }
+
+    this.updateChartHoverTooltip(hitElement, event.clientX, event.clientY);
   };
 
   private handleEraser = (
@@ -13006,11 +13076,11 @@ class App extends React.Component<AppProps, AppState> {
     const dataTransferList = await parseDataTransferEvent(event);
 
     const chartDataRaw = dataTransferList.getData(MIME_TYPES.excalidrawChart);
-    let chartType: "bar" | "line" | null = this.pendingChartInsert;
+    let chartType: InteractiveChartType | null = this.pendingChartInsert;
     if (chartDataRaw) {
       try {
         const parsed = JSON.parse(chartDataRaw) as { type?: string };
-        if (parsed?.type === "bar" || parsed?.type === "line") {
+        if (isInteractiveChartType(parsed?.type)) {
           chartType = parsed.type;
         }
       } catch {
@@ -13019,9 +13089,11 @@ class App extends React.Component<AppProps, AppState> {
     }
     if (!chartType) {
       const textItem = dataTransferList.findByType(MIME_TYPES.text);
-      const match = textItem?.value?.match(/^excalidraw-chart:(bar|line)$/);
-      if (match) {
-        chartType = match[1] as "bar" | "line";
+      const match = textItem?.value?.match(
+        /^excalidraw-chart:(bar|line|area|radar)$/,
+      );
+      if (match && isInteractiveChartType(match[1])) {
+        chartType = match[1];
       }
     }
     if (chartType) {

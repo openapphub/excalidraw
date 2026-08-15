@@ -55,6 +55,16 @@ export const commonProps = {
 
 export type CartesianChartType = "bar" | "line";
 
+/** 可交互图表类型：官方 bar/line/radar + 面积图 */
+export type InteractiveChartType = CartesianChartType | "radar" | "area";
+
+export const INTERACTIVE_CHART_TYPES: readonly InteractiveChartType[] = [
+  "bar",
+  "line",
+  "area",
+  "radar",
+] as const;
+
 export type CartesianChartLayout = {
   slotWidth: number;
   gap: number;

@@ -58,6 +58,7 @@ import {
   commonProps,
   type CartesianChartLayout,
   type CartesianChartType,
+  type InteractiveChartType,
 } from "./charts.constants";
 
 import type {
@@ -73,7 +74,7 @@ const getSpreadsheetDimensionCount = (spreadsheet: Spreadsheet) =>
 
 export const isSpreadsheetValidForChartType = (
   spreadsheet: Spreadsheet | null,
-  chartType: ChartType,
+  chartType: ChartType | InteractiveChartType,
 ) => {
   if (!spreadsheet) {
     return false;
@@ -234,6 +235,27 @@ export const getColorOffset = (colorSeed?: number) => {
 
 export const getBackgroundColor = (colorOffset: number) =>
   bgColors[colorOffset];
+
+/** 优先使用用户指定的系列色，不足时用调色板补齐 */
+export const resolveSeriesColors = (
+  seriesCount: number,
+  colorSeed?: number,
+  seriesColors?: readonly (string | null | undefined)[] | null,
+): readonly string[] => {
+  const palette = getSeriesColors(seriesCount, getColorOffset(colorSeed));
+  if (!seriesColors?.length) {
+    return palette;
+  }
+  return Array.from({ length: seriesCount }, (_, index) => {
+    const custom = seriesColors[index];
+    return typeof custom === "string" && custom.trim()
+      ? custom.trim()
+      : palette[index];
+  });
+};
+
+/** 导出调色板供编辑器色板点选 */
+export const getChartPaletteColors = (): readonly string[] => [...bgColors];
 
 export const getRadarValueScale = (
   series: SpreadsheetSeries[],

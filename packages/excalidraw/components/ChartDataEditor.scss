@@ -51,11 +51,12 @@
 
   .ChartDataEditor__type {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.4rem;
     margin-bottom: 0.75rem;
 
     button {
-      flex: 1;
+      flex: 1 1 calc(50% - 0.2rem);
       border: 1px solid var(--default-border-color);
       border-radius: 0.5rem;
       background: var(--island-bg-color);
@@ -71,6 +72,92 @@
         font-weight: 600;
       }
     }
+  }
+
+  .ChartDataEditor__colors {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .ChartDataEditor__colorRow {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  .ChartDataEditor__colorSwatch {
+    position: relative;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid var(--default-border-color);
+    flex-shrink: 0;
+    cursor: pointer;
+
+    input[type="color"] {
+      position: absolute;
+      inset: -0.35rem;
+      width: calc(100% + 0.7rem);
+      height: calc(100% + 0.7rem);
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      background: transparent;
+    }
+  }
+
+  .ChartDataEditor__colorName {
+    min-width: 4.5rem;
+    font-size: 0.75rem;
+    color: var(--text-primary-color);
+  }
+
+  .ChartDataEditor__palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    flex: 1;
+  }
+
+  .ChartDataEditor__paletteDot {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    padding: 0;
+    cursor: pointer;
+
+    &.is-active {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 1px;
+    }
+  }
+
+  .ChartDataEditor__reshuffle {
+    align-self: flex-start;
+  }
+
+  .ChartDataEditor__seriesHead {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .ChartDataEditor__seriesDot {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+
+  .ChartDataEditor__hint {
+    font-size: 0.75rem;
+    color: var(--color-danger, #e03131);
+    margin-bottom: 0.5rem;
   }
 
   .ChartDataEditor__section {
@@ -160,5 +247,10 @@
     background: var(--color-primary);
     color: #fff;
     font-weight: 600;
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
   }
 }

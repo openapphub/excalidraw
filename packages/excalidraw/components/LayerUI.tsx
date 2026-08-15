@@ -31,6 +31,7 @@ import { SelectedShapeActions, CompactShapeActions } from "./Actions";
 import { LoadingMessage } from "./LoadingMessage";
 import { MobileMenu } from "./MobileMenu";
 import ChartDataEditor from "./ChartDataEditor";
+import ChartHoverTooltip from "./ChartHoverTooltip";
 import { PasteChartDialog } from "./PasteChartDialog";
 import { Section } from "./Section";
 import Stack from "./Stack";
@@ -597,6 +598,9 @@ const LayerUI = ({
       )}
       {defaultUIEnabled && appState.editingChart && (
         <ChartDataEditor app={app} chartId={appState.editingChart.chartId} />
+      )}
+      {defaultUIEnabled && appState.chartHover && (
+        <ChartHoverTooltip chartHover={appState.chartHover} />
       )}
       {editorInterface.formFactor === "phone" && (
         <MobileMenu

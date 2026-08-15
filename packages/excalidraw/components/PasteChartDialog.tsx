@@ -202,7 +202,11 @@ export const PasteChartDialog = ({
   }, [onClose]);
 
   const handleChartClick = (chartType: ChartType, elements: ChartElements) => {
-    if (chartType === "bar" || chartType === "line") {
+    if (
+      chartType === "bar" ||
+      chartType === "line" ||
+      chartType === "radar"
+    ) {
       const spec: ChartSpec = createChartSpec(chartType, data, colorSeed);
       onInsertElements(stampChartSpec(elements, spec));
     } else {

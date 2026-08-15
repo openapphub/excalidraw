@@ -12,7 +12,7 @@ import {
   getChartDimensions,
   getColorOffset,
   getRotatedTextElementBottom,
-  getSeriesColors,
+  resolveSeriesColors,
 } from "./charts.helpers";
 
 import type { ChartElements, Spreadsheet } from "./charts.types";
@@ -22,6 +22,7 @@ export const renderBarChart = (
   x: number,
   y: number,
   colorSeed?: number,
+  seriesColorsOverride?: readonly string[] | null,
 ): ChartElements => {
   const series = spreadsheet.series;
   const layout = getCartesianChartLayout("bar", series.length);
@@ -33,7 +34,11 @@ export const renderBarChart = (
   );
   const colorOffset = getColorOffset(colorSeed);
   const backgroundColor = getBackgroundColor(colorOffset);
-  const seriesColors = getSeriesColors(series.length, colorOffset);
+  const seriesColors = resolveSeriesColors(
+    series.length,
+    colorSeed,
+    seriesColorsOverride,
+  );
   const interBarGap =
     series.length > 1
       ? Math.max(1, Math.floor(layout.gap / (series.length + 1)))
@@ -71,6 +76,12 @@ export const renderBarChart = (
         y: y - barHeight - layout.gap,
         width: barWidth,
         height: barHeight,
+        customData: {
+          chartHit: {
+            seriesIndex,
+            categoryIndex,
+          },
+        },
       });
     }),
   );

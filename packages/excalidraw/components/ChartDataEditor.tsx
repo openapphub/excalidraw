@@ -3,12 +3,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { EVENT, KEYS, sceneCoordsToViewportCoords } from "@excalidraw/common";
 import { getCommonBounds } from "@excalidraw/element";
 
-import type { CartesianChartType } from "../charts/charts.constants";
+import {
+  INTERACTIVE_CHART_TYPES,
+  type InteractiveChartType,
+} from "../charts/charts.constants";
 import {
   getChartElements,
   getChartSpec,
   type ChartSpec,
 } from "../charts/chartSpec";
+import {
+  getChartPaletteColors,
+  isSpreadsheetValidForChartType,
+  resolveSeriesColors,
+} from "../charts/charts.helpers";
 import type { Spreadsheet, SpreadsheetSeries } from "../charts/charts.types";
 import { t } from "../i18n";
 
@@ -30,6 +38,19 @@ const cloneSpreadsheet = (spreadsheet: Spreadsheet): Spreadsheet => ({
 const rowCountOf = (spreadsheet: Spreadsheet) =>
   spreadsheet.labels?.length ?? spreadsheet.series[0]?.values.length ?? 0;
 
+const chartTypeLabel = (type: InteractiveChartType) => {
+  switch (type) {
+    case "bar":
+      return t("labels.chartType_bar");
+    case "line":
+      return t("labels.chartType_line");
+    case "area":
+      return t("labels.chartType_area");
+    case "radar":
+      return t("labels.chartType_radar");
+  }
+};
+
 const ChartDataEditor = ({
   app,
   chartId,
@@ -40,11 +61,27 @@ const ChartDataEditor = ({
   const elements = getChartElements(app.scene.getNonDeletedElements(), chartId);
   const liveSpec = getChartSpec(elements[0]);
 
-  const [draftType, setDraftType] = useState<CartesianChartType>(
+  const [draftType, setDraftType] = useState<InteractiveChartType>(
     liveSpec?.type ?? "bar",
   );
   const [draft, setDraft] = useState<Spreadsheet>(() =>
-    cloneSpreadsheet(liveSpec?.spreadsheet ?? { title: null, labels: [], series: [] }),
+    cloneSpreadsheet(
+      liveSpec?.spreadsheet ?? { title: null, labels: [], series: [] },
+    ),
+  );
+  const [draftColors, setDraftColors] = useState<string[]>(() =>
+    liveSpec
+      ? [
+          ...resolveSeriesColors(
+            liveSpec.spreadsheet.series.length,
+            liveSpec.colorSeed,
+            liveSpec.seriesColors,
+          ),
+        ]
+      : [],
+  );
+  const [colorSeed, setColorSeed] = useState(
+    () => liveSpec?.colorSeed ?? Math.random(),
   );
 
   useEffect(() => {
@@ -54,6 +91,14 @@ const ChartDataEditor = ({
     }
     setDraftType(liveSpec.type);
     setDraft(cloneSpreadsheet(liveSpec.spreadsheet));
+    setColorSeed(liveSpec.colorSeed ?? Math.random());
+    setDraftColors([
+      ...resolveSeriesColors(
+        liveSpec.spreadsheet.series.length,
+        liveSpec.colorSeed,
+        liveSpec.seriesColors,
+      ),
+    ]);
     // 只在切换正在编辑的图表时重置草稿
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartId, liveSpec?.id]);
@@ -70,22 +115,40 @@ const ChartDataEditor = ({
       window.removeEventListener(EVENT.KEYDOWN, onKeyDown, { capture: true });
   }, [app]);
 
-  const apply = useCallback(
-    (nextType: CartesianChartType, nextSpreadsheet: Spreadsheet) => {
-      if (!liveSpec) {
-        return;
+  // 系列增减时补齐颜色
+  useEffect(() => {
+    setDraftColors((prev) => {
+      const next = resolveSeriesColors(draft.series.length, colorSeed, prev);
+      if (
+        prev.length === next.length &&
+        prev.every((color, index) => color === next[index])
+      ) {
+        return prev;
       }
-      const nextSpec: ChartSpec = {
-        ...liveSpec,
-        type: nextType,
-        spreadsheet: nextSpreadsheet,
-      };
-      app.replaceChartFromSpec(nextSpec);
-    },
-    [app, liveSpec],
-  );
+      return [...next];
+    });
+  }, [draft.series.length, colorSeed]);
+
+  const apply = useCallback(() => {
+    if (!liveSpec) {
+      return;
+    }
+    if (!isSpreadsheetValidForChartType(draft, draftType)) {
+      return;
+    }
+    const nextSpec: ChartSpec = {
+      ...liveSpec,
+      type: draftType,
+      spreadsheet: draft,
+      colorSeed,
+      seriesColors: draftColors.slice(0, draft.series.length),
+    };
+    app.replaceChartFromSpec(nextSpec);
+  }, [app, liveSpec, draftType, draft, colorSeed, draftColors]);
 
   const rowCount = rowCountOf(draft);
+  const canApply = isSpreadsheetValidForChartType(draft, draftType);
+  const palette = useMemo(() => getChartPaletteColors(), []);
 
   const updateRowLabel = (rowIndex: number, label: string) => {
     setDraft((prev) => {
@@ -119,6 +182,22 @@ const ChartDataEditor = ({
     }));
   };
 
+  const updateSeriesColor = (seriesIndex: number, color: string) => {
+    setDraftColors((prev) => {
+      const next = [...prev];
+      next[seriesIndex] = color;
+      return next;
+    });
+  };
+
+  const reshuffleColors = () => {
+    const nextSeed = Math.random();
+    setColorSeed(nextSeed);
+    setDraftColors([
+      ...resolveSeriesColors(draft.series.length, nextSeed, null),
+    ]);
+  };
+
   const addRow = () => {
     setDraft((prev) => {
       const labels = [...(prev.labels ?? Array(rowCountOf(prev)).fill(""))];
@@ -139,7 +218,9 @@ const ChartDataEditor = ({
       if (rowCountOf(prev) <= 2) {
         return prev;
       }
-      const labels = prev.labels ? prev.labels.filter((_, i) => i !== rowIndex) : null;
+      const labels = prev.labels
+        ? prev.labels.filter((_, i) => i !== rowIndex)
+        : null;
       return {
         ...prev,
         labels,
@@ -172,6 +253,7 @@ const ChartDataEditor = ({
         series: prev.series.filter((_, i) => i !== seriesIndex),
       };
     });
+    setDraftColors((prev) => prev.filter((_, i) => i !== seriesIndex));
   };
 
   const position = useMemo(() => {
@@ -217,18 +299,60 @@ const ChartDataEditor = ({
       </div>
 
       <div className="ChartDataEditor__type">
-        {(["bar", "line"] as const).map((type) => (
+        {INTERACTIVE_CHART_TYPES.map((type) => (
           <button
             key={type}
             type="button"
             className={draftType === type ? "is-active" : undefined}
             onClick={() => setDraftType(type)}
           >
-            {type === "bar"
-              ? t("labels.chartType_bar")
-              : t("labels.chartType_line")}
+            {chartTypeLabel(type)}
           </button>
         ))}
+      </div>
+
+      <div className="ChartDataEditor__section">{t("labels.chartColors")}</div>
+      <div className="ChartDataEditor__colors">
+        {draft.series.map((series, seriesIndex) => (
+          <div key={seriesIndex} className="ChartDataEditor__colorRow">
+            <label className="ChartDataEditor__colorSwatch">
+              <input
+                type="color"
+                value={draftColors[seriesIndex] ?? "#1971c2"}
+                aria-label={t("labels.chartSeriesColor")}
+                onChange={(event) =>
+                  updateSeriesColor(seriesIndex, event.target.value)
+                }
+              />
+            </label>
+            <span className="ChartDataEditor__colorName">
+              {series.title?.trim() || `Series ${seriesIndex + 1}`}
+            </span>
+            <div className="ChartDataEditor__palette">
+              {palette.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={
+                    draftColors[seriesIndex] === color
+                      ? "ChartDataEditor__paletteDot is-active"
+                      : "ChartDataEditor__paletteDot"
+                  }
+                  style={{ background: color }}
+                  aria-label={color}
+                  onClick={() => updateSeriesColor(seriesIndex, color)}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="ChartDataEditor__ghost ChartDataEditor__reshuffle"
+          onClick={reshuffleColors}
+        >
+          {t("labels.chartReshuffleColors")}
+        </button>
       </div>
 
       <div className="ChartDataEditor__section">{t("labels.chartRows")}</div>
@@ -239,23 +363,31 @@ const ChartDataEditor = ({
               <th>{t("labels.chartRowLabel")}</th>
               {draft.series.map((series, seriesIndex) => (
                 <th key={seriesIndex}>
-                  <input
-                    value={series.title ?? ""}
-                    aria-label={t("labels.chartSeries")}
-                    onChange={(event) =>
-                      updateSeriesTitle(seriesIndex, event.target.value)
-                    }
-                  />
-                  {draft.series.length > 1 && (
-                    <button
-                      type="button"
-                      className="ChartDataEditor__iconBtn"
-                      aria-label={t("labels.chartRemoveSeries")}
-                      onClick={() => removeSeries(seriesIndex)}
-                    >
-                      ×
-                    </button>
-                  )}
+                  <div className="ChartDataEditor__seriesHead">
+                    <span
+                      className="ChartDataEditor__seriesDot"
+                      style={{
+                        background: draftColors[seriesIndex] ?? "#1971c2",
+                      }}
+                    />
+                    <input
+                      value={series.title ?? ""}
+                      aria-label={t("labels.chartSeries")}
+                      onChange={(event) =>
+                        updateSeriesTitle(seriesIndex, event.target.value)
+                      }
+                    />
+                    {draft.series.length > 1 && (
+                      <button
+                        type="button"
+                        className="ChartDataEditor__iconBtn"
+                        aria-label={t("labels.chartRemoveSeries")}
+                        onClick={() => removeSeries(seriesIndex)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 </th>
               ))}
               <th />
@@ -300,6 +432,12 @@ const ChartDataEditor = ({
         </table>
       </div>
 
+      {!canApply && draftType === "radar" && (
+        <div className="ChartDataEditor__hint">
+          {t("labels.chartRadarMinRows")}
+        </div>
+      )}
+
       <div className="ChartDataEditor__actions">
         <button type="button" className="ChartDataEditor__ghost" onClick={addRow}>
           {t("labels.chartAddRow")}
@@ -314,7 +452,8 @@ const ChartDataEditor = ({
         <button
           type="button"
           className="ChartDataEditor__apply"
-          onClick={() => apply(draftType, draft)}
+          disabled={!canApply}
+          onClick={apply}
         >
           {t("labels.chartApply")}
         </button>

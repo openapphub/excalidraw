@@ -10,6 +10,7 @@ import {
 
 import {
   measureText,
+  newElement,
   newLinearElement,
   newTextElement,
 } from "@excalidraw/element";
@@ -32,7 +33,7 @@ import {
   getRadarDimensions,
   getRadarDisplayText,
   getRadarValueScale,
-  getSeriesColors,
+  resolveSeriesColors,
   isSpreadsheetValidForChartType,
 } from "./charts.helpers";
 
@@ -43,6 +44,7 @@ export const renderRadarChart = (
   x: number,
   y: number,
   colorSeed?: number,
+  seriesColorsOverride?: readonly string[] | null,
 ): ChartElements | null => {
   if (!isSpreadsheetValidForChartType(spreadsheet, "radar")) {
     return null;
@@ -56,7 +58,11 @@ export const renderRadarChart = (
   const { normalize, renderSteps } = getRadarValueScale(series, labels.length);
   const colorOffset = getColorOffset(colorSeed);
   const backgroundColor = getBackgroundColor(colorOffset);
-  const seriesColors = getSeriesColors(series.length, colorOffset);
+  const seriesColors = resolveSeriesColors(
+    series.length,
+    colorSeed,
+    seriesColorsOverride,
+  );
   const { chartWidth, chartHeight } = getRadarDimensions();
   const centerX = x + chartWidth / 2;
   const centerY = y - chartHeight / 2;
@@ -165,7 +171,7 @@ export const renderRadarChart = (
     points.push(pointFrom(points[0][0], points[0][1]));
 
     return newLinearElement({
-      backgroundColor: "transparent",
+      backgroundColor: seriesColors[index],
       ...commonProps,
       type: "line",
       x: centerX,
@@ -174,10 +180,40 @@ export const renderRadarChart = (
       height: radius * 2,
       strokeColor: seriesColors[index],
       strokeWidth: 2,
+      fillStyle: "solid",
+      opacity: 35,
       polygon: true,
       points,
     });
   });
+
+  const seriesDots = series.flatMap((seriesData, seriesIndex) =>
+    angles.map((angle, axisIndex) => {
+      const value = seriesData.values[axisIndex] ?? 0;
+      const pointRadius = normalize(value, axisIndex) * radius;
+      const px = Math.cos(angle) * pointRadius;
+      const py = Math.sin(angle) * pointRadius;
+      const size = BAR_GAP * 0.7;
+      return newElement({
+        backgroundColor: seriesColors[seriesIndex],
+        ...commonProps,
+        fillStyle: "solid",
+        strokeColor: seriesColors[seriesIndex],
+        strokeWidth: 1,
+        type: "ellipse",
+        x: centerX + px - size / 2,
+        y: centerY + py - size / 2,
+        width: size,
+        height: size,
+        customData: {
+          chartHit: {
+            seriesIndex,
+            categoryIndex: axisIndex,
+          },
+        },
+      });
+    }),
+  );
 
   const seriesLegend = createSeriesLegend(
     series,
@@ -194,6 +230,7 @@ export const renderRadarChart = (
     ...radarGridLines,
     ...spokes,
     ...seriesPolygons,
+    ...seriesDots,
     ...seriesLegend,
   ];
 };

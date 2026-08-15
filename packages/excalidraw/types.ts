@@ -53,7 +53,7 @@ import type {
 import type { GlobalPoint } from "@excalidraw/math";
 
 import type { Action } from "./actions/types";
-import type { Spreadsheet } from "./charts";
+import type { Spreadsheet, InteractiveChartType } from "./charts";
 import type { ClipboardData } from "./clipboard";
 import type App from "./components/App";
 import type Library from "./data/library";
@@ -463,6 +463,15 @@ export interface AppState {
     | { name: "charts"; data: Spreadsheet; rawText: string };
   /** 双击可编辑图表时打开的数据编辑器 */
   editingChart: { chartId: string } | null;
+  /** 图表柱/点悬停时的 ECharts 风格提示 */
+  chartHover: {
+    clientX: number;
+    clientY: number;
+    label: string;
+    categoryIndex: number;
+    seriesIndex: number;
+    rows: { title: string; value: number; active: boolean }[];
+  } | null;
   /**
    * Reflects user preference for whether the default sidebar should be docked.
    *
@@ -1119,7 +1128,7 @@ export type AppClassProperties = {
   onInsertElements: App["onInsertElements"];
   insertChart: App["insertChart"];
   replaceChartFromSpec: App["replaceChartFromSpec"];
-  pendingChartInsert: "bar" | "line" | null;
+  pendingChartInsert: InteractiveChartType | null;
   onExportImage: App["onExportImage"];
   viewport: App["viewport"];
   addFiles: App["addFiles"];

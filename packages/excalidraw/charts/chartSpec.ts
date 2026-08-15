@@ -3,14 +3,67 @@ import { newElementWith } from "@excalidraw/element";
 
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
-import type { CartesianChartType } from "./charts.constants";
+import type { InteractiveChartType } from "./charts.constants";
+import { resolveSeriesColors } from "./charts.helpers";
 import type { ChartElements, Spreadsheet } from "./charts.types";
 
 export type ChartSpec = {
   id: string;
-  type: CartesianChartType;
+  type: InteractiveChartType;
   spreadsheet: Spreadsheet;
   colorSeed?: number;
+  /** 每个系列的自定义颜色；缺省时按 colorSeed 从调色板生成 */
+  seriesColors?: string[];
+};
+
+/** 柱/折线/面积/雷达数据点上的命中信息，用于 hover 提示 */
+export type ChartHit = {
+  seriesIndex: number;
+  categoryIndex: number;
+};
+
+export type ChartHoverContent = {
+  label: string;
+  categoryIndex: number;
+  seriesIndex: number;
+  rows: { title: string; value: number; active: boolean }[];
+};
+
+export const getChartHit = (
+  element: NonDeletedExcalidrawElement | null | undefined,
+): ChartHit | null => {
+  const hit = element?.customData?.chartHit;
+  if (
+    !hit ||
+    typeof hit.seriesIndex !== "number" ||
+    typeof hit.categoryIndex !== "number"
+  ) {
+    return null;
+  }
+  return {
+    seriesIndex: hit.seriesIndex,
+    categoryIndex: hit.categoryIndex,
+  };
+};
+
+export const buildChartHoverContent = (
+  spec: ChartSpec,
+  hit: ChartHit,
+): ChartHoverContent => {
+  const label =
+    spec.spreadsheet.labels?.[hit.categoryIndex] ??
+    `Row ${hit.categoryIndex + 1}`;
+  const rows = spec.spreadsheet.series.map((series, index) => ({
+    title: series.title?.trim() || `Series ${index + 1}`,
+    value: series.values[hit.categoryIndex] ?? 0,
+    active: index === hit.seriesIndex,
+  }));
+  return {
+    label,
+    categoryIndex: hit.categoryIndex,
+    seriesIndex: hit.seriesIndex,
+    rows,
+  };
 };
 
 export const DEFAULT_CHART_SPREADSHEET: Spreadsheet = {
@@ -22,15 +75,24 @@ export const DEFAULT_CHART_SPREADSHEET: Spreadsheet = {
   ],
 };
 
+export const isInteractiveChartType = (
+  type: unknown,
+): type is InteractiveChartType =>
+  type === "bar" || type === "line" || type === "area" || type === "radar";
+
 export const createChartSpec = (
-  type: CartesianChartType,
+  type: InteractiveChartType,
   spreadsheet: Spreadsheet = DEFAULT_CHART_SPREADSHEET,
   colorSeed: number = Math.random(),
+  seriesColors?: string[],
 ): ChartSpec => ({
   id: randomId(),
   type,
   spreadsheet,
   colorSeed,
+  seriesColors:
+    seriesColors ??
+    ([...resolveSeriesColors(spreadsheet.series.length, colorSeed)] as string[]),
 });
 
 export const getChartSpec = (
@@ -40,7 +102,7 @@ export const getChartSpec = (
   if (
     !chart ||
     typeof chart.id !== "string" ||
-    (chart.type !== "bar" && chart.type !== "line") ||
+    !isInteractiveChartType(chart.type) ||
     !chart.spreadsheet ||
     !Array.isArray(chart.spreadsheet.series)
   ) {

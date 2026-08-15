@@ -2009,6 +2009,33 @@ export const chartLineIcon = createIcon(
   tablerIconProps,
 );
 
+// tabler-icons: chart-area-line
+export const chartAreaIcon = createIcon(
+  <g strokeWidth={1.5}>
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M4 19l4 -6l4 2l4 -5l4 4" />
+    <path d="M4 19l16 0" />
+    <path
+      d="M4 19v-14"
+      strokeOpacity={0}
+    />
+    <path d="M4 15l4 -6l4 2l4 -5l4 4v6z" fill="currentColor" fillOpacity={0.2} stroke="none" />
+  </g>,
+  tablerIconProps,
+);
+
+// tabler-icons: chart-radar
+export const chartRadarIcon = createIcon(
+  <g strokeWidth={1.5}>
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M12 3l9.5 7l-3.5 11h-12l-3.5 -11z" />
+    <path d="M12 7.5l5.5 4l-2.5 5.5h-6l-2.5 -5.5z" />
+    <path d="M2.5 10l9.5 3l9.5 -3" />
+    <path d="M12 3v16.5" />
+  </g>,
+  tablerIconProps,
+);
+
 export const mermaidLogoIcon = createIcon(
   <path
     fill="currentColor"
