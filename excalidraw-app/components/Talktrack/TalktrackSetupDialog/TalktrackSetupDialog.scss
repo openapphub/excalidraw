@@ -1,0 +1,252 @@
+// TalktrackSetupDialog - 录制设置对话框（带摄像头预览）
+
+.talktrack-setup-dialog {
+  :global(.Dialog__content) {
+    max-width: 400px;
+    width: 100%;
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 8px 0;
+  }
+
+  &__preview {
+    width: 180px;
+    height: 180px;
+    margin: 0 auto;
+    border-radius: 50%;
+    overflow: hidden;
+    background: linear-gradient(
+      135deg,
+      var(--color-primary-light, #e8f0fe) 0%,
+      var(--color-primary, #4a6ee0) 100%
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); // Mirror the preview
+  }
+
+  &__avatar {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    opacity: 0.9;
+
+    svg {
+      width: 80px;
+      height: 80px;
+    }
+  }
+
+  &__toggles {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  &__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--default-border-color, #e5e5e5);
+    border-radius: 50%;
+    background: var(--island-bg-color, #f5f5f5);
+    color: var(--text-secondary-color, #6b6b6b);
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
+      color: var(--text-primary-color, #1b1b1f);
+    }
+  }
+
+  &__toggle--active {
+    background: var(--color-primary-light, #e8f0fe);
+    color: var(--color-primary, #4a6ee0);
+    border-color: var(--color-primary, #4a6ee0);
+  }
+
+  &__toggle--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+    color: var(--text-secondary-color, #6b6b6b);
+  }
+
+  &__spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--default-border-color, #e5e5e5);
+    border-top-color: var(--color-primary, #4a6ee0);
+    border-radius: 50%;
+    animation: talktrackSpin 0.8s linear infinite;
+  }
+
+  @keyframes talktrackSpin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  &__error {
+    text-align: center;
+    padding: 16px;
+    color: #d32f2f;
+    font-size: 13px;
+  }
+
+  &__devices {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__device-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary-color, #6b6b6b);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid var(--default-border-color, #e5e5e5);
+    border-radius: 8px;
+    background: var(--island-bg-color, #fff);
+    color: var(--text-primary-color, #1b1b1f);
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+
+    &:hover:not(:disabled) {
+      border-color: var(--color-primary, #4a6ee0);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-primary, #4a6ee0);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  &__start-button {
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    background: var(--color-primary, #4a6ee0);
+    color: white;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: var(--color-primary-darker, #3a5ecc);
+      transform: translateY(-1px);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  &__back-button {
+    width: 100%;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid var(--default-border-color, #e5e5e5);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-primary-color, #1b1b1f);
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: var(--island-bg-color, #f5f5f5);
+    }
+  }
+}
+
+// Dark mode
+.excalidraw.theme--dark {
+  .talktrack-setup-dialog__select {
+    border-color: var(--default-border-color, #3d3d4a);
+    background: var(--island-bg-color, #232329);
+    color: var(--text-primary-color, #f1f1f1);
+  }
+
+  .talktrack-setup-dialog__toggle {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--default-border-color, #3d3d4a);
+    color: var(--text-secondary-color, #9a9a9a);
+
+    &:hover:not(:disabled) {
+      background: var(--button-hover-bg, rgba(255, 255, 255, 0.1));
+      color: var(--text-primary-color, #f1f1f1);
+    }
+  }
+
+  .talktrack-setup-dialog__toggle--active {
+    background: rgba(74, 110, 224, 0.2);
+    color: var(--color-primary-light, #a8c7fa);
+    border-color: var(--color-primary, #4a6ee0);
+  }
+
+  .talktrack-setup-dialog__back-button {
+    border-color: var(--default-border-color, #3d3d4a);
+    color: var(--text-primary-color, #f1f1f1);
+
+    &:hover {
+      background: var(--island-bg-color, #232329);
+    }
+  }
+}

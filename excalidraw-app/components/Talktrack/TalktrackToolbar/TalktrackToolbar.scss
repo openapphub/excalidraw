@@ -1,0 +1,176 @@
+// TalktrackToolbar - 录制工具栏（可拖拽，带摄像头气泡预览）
+
+.talktrack-toolbar {
+  // Position set via inline styles for draggability
+  z-index: 1000;
+  pointer-events: auto;
+
+  &--dragging {
+    cursor: grabbing;
+  }
+
+  &__camera-preview {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    background: var(--island-bg-color, #fff);
+    cursor: grab;
+    transition: box-shadow 0.15s ease, transform 0.1s ease;
+    user-select: none;
+
+    &:hover {
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  &__camera-preview--dragging {
+    cursor: grabbing;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  &__camera-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    pointer-events: none;
+  }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px;
+    background: var(--island-bg-color, #fff);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--default-border-color, #e5e5e5);
+    cursor: grab;
+    user-select: none;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  &__button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary-color, #333);
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: var(--button-hover-bg, #f0f0f0);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    &--confirm {
+      background: #ffebee;
+      color: #d32f2f;
+
+      &:hover {
+        background: #ffcdd2;
+      }
+    }
+  }
+
+  &__timer {
+    min-width: 56px;
+    padding: 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary-color, #333);
+    text-align: center;
+
+    &--paused {
+      opacity: 0.6;
+    }
+  }
+
+  &__stop-button {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: none;
+    border-radius: 6px;
+    background: #ef5350;
+    color: white;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: #e53935;
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+// Dark mode
+.excalidraw.theme--dark {
+  .talktrack-toolbar__controls {
+    background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d4a);
+  }
+
+  .talktrack-toolbar__button {
+    color: var(--text-primary-color, #f1f1f1);
+
+    &:hover:not(:disabled) {
+      background: var(--button-hover-bg, rgba(255, 255, 255, 0.1));
+    }
+  }
+
+  .talktrack-toolbar__timer {
+    color: var(--text-primary-color, #f1f1f1);
+  }
+}
+
+// Responsive
+@media (max-width: 600px) {
+  .talktrack-toolbar__controls {
+    padding: 4px;
+    gap: 2px;
+  }
+
+  .talktrack-toolbar__button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .talktrack-toolbar__timer {
+    min-width: 48px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .talktrack-toolbar__stop-button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
