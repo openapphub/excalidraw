@@ -223,7 +223,8 @@ import {
   type DrawingDefaults,
 } from "./drawingDefaults";
 
-import { CREATIONS_SIDEBAR_NAME } from "./app_constants";
+import { PresentationMode } from "./components/Presentation/PresentationMode";
+import { PresentationTalktrackMount } from "./components/Talktrack/PresentationTalktrackMount";
 
 import type { CollabAPI } from "./collab/Collab";
 
@@ -1927,6 +1928,12 @@ const ExcalidrawWrapper = () => {
               不要再额外挂一份 DefaultSidebar __fallback，否则会同时存在两个
               Island，点侧栏会被另一份的 useOutsideClick 当成外部点击而关闭。 */}
           <CommentsMount excalidrawAPI={excalidrawAPI} />
+
+          {/* 演示 + 录制：DefaultSidebar 的 presentation/recording tab。
+              与 CommentsMount 的 DefaultSidebar 并列，各自贡献 TabTrigger + Tab。 */}
+          <PresentationTalktrackMount excalidrawAPI={excalidrawAPI} />
+          <PresentationMode excalidrawAPI={excalidrawAPI} />
+
           <SceneEditLockBanner />
           <WorkspaceSidebarTrigger />
           <AppMainMenu

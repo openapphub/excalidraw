@@ -5,7 +5,6 @@ import React from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { isExcalidrawPlusSignedUser } from "../app_constants";
-import { CREATIONS_SIDEBAR_NAME } from "../app_constants";
 import { useAuth } from "../auth";
 import { useAtomValue } from "../app-jotai";
 import { currentCanvasIdAtom } from "../app-jotai";
@@ -16,7 +15,7 @@ import { EncryptedIcon } from "./EncryptedIcon";
 
 import "./AppFooter.scss";
 
-// 图标：copy AstraDraw AppFooter（旧版官方 tabler icons 的 SVG path）
+// 图标：演示
 const presentationIcon = (
   <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
     <g strokeWidth="1.25">
@@ -40,6 +39,15 @@ const videoIcon = (
   </svg>
 );
 
+const animationIcon = (
+  <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+    <g strokeWidth="1.25">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" />
+    </g>
+  </svg>
+);
+
 const commentsIcon = (
   <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
     <g strokeWidth="1.25">
@@ -54,9 +62,8 @@ export interface AppFooterProps {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
 }
 
-// 底部左侧图标按钮：copy AstraDraw AppFooter 的 FooterLeftExtra 布局。
-// 三个按钮（演示/录制/评论）toggle 官方 Sidebar 对应 tab —— 当前只接
-// creations（画布列表），其余两个后续阶段接功能。
+// 底部左侧图标按钮：演示、录制、评论。
+// 全部 toggle 官方 DefaultSidebar 的对应 tab（和评论按钮一致）。
 const AppFooterLeft = React.memo(
   ({ excalidrawAPI }: { excalidrawAPI: ExcalidrawImperativeAPI | null }) => {
     const { FooterLeftExtraTunnel } = useTunnels();
@@ -66,30 +73,20 @@ const AppFooterLeft = React.memo(
     const showComments =
       isAuthenticated && !!sceneId && sceneId === currentCanvasId;
 
-    // 评论走官方 DefaultSidebar 的 comments tab（由 CommentsMount 提供）；
-    // 演示/录制仍指向 creations 侧栏，等各自功能落地。
     const handleToggleComments = () => {
       excalidrawAPI?.toggleSidebar({ name: "default", tab: "comments" });
     };
 
-    const handleToggleSidebar = (tab: string) => {
-      if (!excalidrawAPI) {
-        return;
-      }
-      const appState = excalidrawAPI.getAppState();
-      const sidebarIsOpen =
-        appState.openSidebar?.name === CREATIONS_SIDEBAR_NAME &&
-        appState.openSidebar?.tab === tab;
+    const handleTogglePresentation = () => {
+      excalidrawAPI?.toggleSidebar({ name: "default", tab: "presentation" });
+    };
 
-      if (sidebarIsOpen) {
-        excalidrawAPI.updateScene({ appState: { openSidebar: null } });
-      } else {
-        excalidrawAPI.updateScene({
-          appState: {
-            openSidebar: { name: CREATIONS_SIDEBAR_NAME, tab },
-          },
-        });
-      }
+    const handleToggleRecording = () => {
+      excalidrawAPI?.toggleSidebar({ name: "default", tab: "recording" });
+    };
+
+    const handleToggleAnimation = () => {
+      excalidrawAPI?.toggleSidebar({ name: "default", tab: "animation" });
     };
 
     return (
@@ -98,7 +95,7 @@ const AppFooterLeft = React.memo(
           <Tooltip label="演示">
             <button
               className="sidebarButton"
-              onClick={() => handleToggleSidebar("presentation")}
+              onClick={handleTogglePresentation}
               onPointerDown={(e) => e.stopPropagation()}
               type="button"
               aria-label="演示"
@@ -111,13 +108,26 @@ const AppFooterLeft = React.memo(
           <Tooltip label="录制">
             <button
               className="sidebarButton"
-              onClick={() => handleToggleSidebar("recording")}
+              onClick={handleToggleRecording}
               onPointerDown={(e) => e.stopPropagation()}
               type="button"
               aria-label="录制"
             >
               <div className="toolIconWrapper" aria-hidden="true">
                 {videoIcon}
+              </div>
+            </button>
+          </Tooltip>
+          <Tooltip label="动画">
+            <button
+              className="sidebarButton"
+              onClick={handleToggleAnimation}
+              onPointerDown={(e) => e.stopPropagation()}
+              type="button"
+              aria-label="动画"
+            >
+              <div className="toolIconWrapper" aria-hidden="true">
+                {animationIcon}
               </div>
             </button>
           </Tooltip>
@@ -147,7 +157,7 @@ export const AppFooter = React.memo(
   ({ onChange, excalidrawAPI }: AppFooterProps) => {
     return (
       <>
-        {/* 底部左侧：图标按钮组（copy AstraDraw FooterLeftExtra） */}
+        {/* 底部左侧：图标按钮组（演示 + 录制 + 评论） */}
         <AppFooterLeft excalidrawAPI={excalidrawAPI} />
 
         {/* 底部中央内容 */}
