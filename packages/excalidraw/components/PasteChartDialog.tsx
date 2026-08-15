@@ -5,7 +5,12 @@ import { newTextElement } from "@excalidraw/element";
 import type { ChartType } from "@excalidraw/element/types";
 
 import { trackEvent } from "../analytics";
-import { isSpreadsheetValidForChartType, renderSpreadsheet } from "../charts";
+import {
+  createChartSpec,
+  isSpreadsheetValidForChartType,
+  renderSpreadsheet,
+  stampChartSpec,
+} from "../charts";
 import { t } from "../i18n";
 import { exportToSvg } from "../scene/export";
 
@@ -19,6 +24,7 @@ import "./PasteChartDialog.scss";
 import { bucketFillIcon } from "./icons";
 
 import type { ChartElements, Spreadsheet } from "../charts";
+import type { ChartSpec } from "../charts/chartSpec";
 
 type OnPlainTextPaste = (rawText: string) => void;
 
@@ -196,7 +202,12 @@ export const PasteChartDialog = ({
   }, [onClose]);
 
   const handleChartClick = (chartType: ChartType, elements: ChartElements) => {
-    onInsertElements(elements);
+    if (chartType === "bar" || chartType === "line") {
+      const spec: ChartSpec = createChartSpec(chartType, data, colorSeed);
+      onInsertElements(stampChartSpec(elements, spec));
+    } else {
+      onInsertElements(elements);
+    }
     trackEvent("paste", "chart", chartType);
     onClose();
     focusContainer();

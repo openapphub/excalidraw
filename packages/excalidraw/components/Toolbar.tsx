@@ -25,6 +25,7 @@ import {
   OpenAIIcon,
   DotsIcon,
 } from "./icons";
+import { ChartToolMenuItems } from "./ChartToolItems";
 import {
   ArrowToolButton,
   DiamondToolButton,
@@ -174,6 +175,7 @@ const ExtraToolsDropdown = ({
             {t("toolBar.lasso")}
           </DropdownMenu.Item>
         )}
+        <ChartToolMenuItems app={app} />
         <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
           Generate
         </div>

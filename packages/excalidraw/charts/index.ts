@@ -8,6 +8,10 @@ import {
   tryParseSpreadsheet,
 } from "./charts.parse";
 import { renderRadarChart } from "./charts.radar";
+import {
+  stampChartSpec,
+  type ChartSpec,
+} from "./chartSpec";
 
 import type { ChartElements, Spreadsheet } from "./charts.types";
 
@@ -20,6 +24,14 @@ export {
 
 export { isSpreadsheetValidForChartType } from "./charts.helpers";
 export { tryParseCells, tryParseNumber, tryParseSpreadsheet };
+export {
+  type ChartSpec,
+  DEFAULT_CHART_SPREADSHEET,
+  createChartSpec,
+  getChartSpec,
+  getChartElements,
+  stampChartSpec,
+} from "./chartSpec";
 
 export const renderSpreadsheet = (
   chartType: ChartType,
@@ -35,4 +47,22 @@ export const renderSpreadsheet = (
     return renderRadarChart(spreadsheet, x, y, colorSeed);
   }
   return renderBarChart(spreadsheet, x, y, colorSeed);
+};
+
+export const createChartElements = (
+  spec: ChartSpec,
+  x: number,
+  y: number,
+): ChartElements | null => {
+  const elements = renderSpreadsheet(
+    spec.type,
+    spec.spreadsheet,
+    x,
+    y,
+    spec.colorSeed,
+  );
+  if (!elements) {
+    return null;
+  }
+  return stampChartSpec(elements, spec);
 };

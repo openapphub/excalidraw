@@ -1,0 +1,164 @@
+@use "../css/variables.module" as *;
+
+.excalidraw {
+  .ChartDataEditor {
+    position: absolute;
+    z-index: var(--zIndex-ui-top);
+    width: min(420px, calc(100% - 24px));
+    max-height: min(520px, calc(100% - 24px));
+    overflow: auto;
+    padding: 0.75rem;
+    pointer-events: var(--ui-pointerEvents);
+    background: var(--island-bg-color);
+    box-shadow: var(--shadow-island);
+    border-radius: 0.75rem;
+  }
+
+  .ChartDataEditor__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .ChartDataEditor__title {
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  .ChartDataEditor__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 0;
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--icon-fill-color);
+    cursor: pointer;
+
+    svg {
+      width: 1rem;
+      height: 1rem;
+    }
+
+    &:hover {
+      background: var(--button-hover-bg);
+    }
+  }
+
+  .ChartDataEditor__type {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+
+    button {
+      flex: 1;
+      border: 1px solid var(--default-border-color);
+      border-radius: 0.5rem;
+      background: var(--island-bg-color);
+      color: var(--text-primary-color);
+      padding: 0.35rem 0.5rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+
+      &.is-active {
+        border-color: var(--color-primary);
+        background: var(--color-primary-light);
+        color: var(--color-primary);
+        font-weight: 600;
+      }
+    }
+  }
+
+  .ChartDataEditor__section {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-gray-60);
+    margin-bottom: 0.4rem;
+  }
+
+  .ChartDataEditor__tableWrap {
+    overflow: auto;
+    margin-bottom: 0.75rem;
+  }
+
+  .ChartDataEditor__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+
+    th,
+    td {
+      padding: 0.2rem;
+      vertical-align: middle;
+    }
+
+    th {
+      font-weight: 600;
+      text-align: left;
+    }
+
+    input {
+      width: 100%;
+      min-width: 4rem;
+      box-sizing: border-box;
+      border: 1px solid var(--default-border-color);
+      border-radius: 0.35rem;
+      padding: 0.28rem 0.4rem;
+      background: var(--input-bg-color, var(--island-bg-color));
+      color: var(--text-primary-color);
+    }
+  }
+
+  .ChartDataEditor__iconBtn {
+    border: 0;
+    background: transparent;
+    color: var(--color-gray-60);
+    cursor: pointer;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 0.3rem;
+    font-size: 1rem;
+    line-height: 1;
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    &:not(:disabled):hover {
+      background: var(--button-hover-bg);
+    }
+  }
+
+  .ChartDataEditor__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .ChartDataEditor__ghost,
+  .ChartDataEditor__apply {
+    border-radius: 0.5rem;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .ChartDataEditor__ghost {
+    border: 1px solid var(--default-border-color);
+    background: transparent;
+    color: var(--text-primary-color);
+  }
+
+  .ChartDataEditor__apply {
+    margin-left: auto;
+    border: 0;
+    background: var(--color-primary);
+    color: #fff;
+    font-weight: 600;
+  }
+}

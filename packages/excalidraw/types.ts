@@ -461,6 +461,8 @@ export interface AppState {
     | { name: "settings" }
     | { name: "elementLinkSelector"; sourceElementId: ExcalidrawElement["id"] }
     | { name: "charts"; data: Spreadsheet; rawText: string };
+  /** 双击可编辑图表时打开的数据编辑器 */
+  editingChart: { chartId: string } | null;
   /**
    * Reflects user preference for whether the default sidebar should be docked.
    *
@@ -1115,6 +1117,9 @@ export type AppClassProperties = {
   pasteFromClipboard: App["pasteFromClipboard"];
   id: App["id"];
   onInsertElements: App["onInsertElements"];
+  insertChart: App["insertChart"];
+  replaceChartFromSpec: App["replaceChartFromSpec"];
+  pendingChartInsert: "bar" | "line" | null;
   onExportImage: App["onExportImage"];
   viewport: App["viewport"];
   addFiles: App["addFiles"];

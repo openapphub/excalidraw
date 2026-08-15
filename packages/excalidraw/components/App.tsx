@@ -422,7 +422,14 @@ import { isMaybeMermaidDefinition } from "../mermaid";
 import { LassoTrail } from "../lasso";
 import { EraserTrail } from "../eraser";
 import { getShortcutKey } from "../shortcut";
-import { tryParseSpreadsheet } from "../charts";
+import {
+  createChartElements,
+  createChartSpec,
+  getChartElements,
+  getChartSpec,
+  tryParseSpreadsheet,
+  type ChartSpec,
+} from "../charts";
 
 import ConvertElementTypePopup, {
   getConversionTypeFromElements,
@@ -665,6 +672,9 @@ class App extends React.Component<AppProps, AppState> {
   private elementsPendingErasure: ElementsPendingErasure = new Set();
 
   private _initialized = false;
+
+  /** 工具栏拖放图表时暂存类型，供 onDrop 回退读取 */
+  public pendingChartInsert: "bar" | "line" | null = null;
 
   private readonly editorLifecycleEvents = new AppEventBus<
     ExcalidrawImperativeAPIEventMap,
@@ -2707,6 +2717,76 @@ class App extends React.Component<AppProps, AppState> {
       elements,
       position: "center",
       files: null,
+    });
+  };
+
+  public insertChart = (
+    type: "bar" | "line",
+    position:
+      | { clientX: number; clientY: number }
+      | "cursor"
+      | "center" = "center",
+  ) => {
+    const spec = createChartSpec(type);
+    const elements = createChartElements(spec, 0, 0);
+    if (!elements) {
+      return;
+    }
+    this.addElementsFromPasteOrLibrary({
+      elements,
+      position,
+      files: null,
+      retainSeed: true,
+    });
+    this.setState({ editingChart: { chartId: spec.id } });
+    trackEvent("element", "chart", type);
+  };
+
+  public replaceChartFromSpec = (spec: ChartSpec) => {
+    const oldElements = getChartElements(
+      this.scene.getNonDeletedElements(),
+      spec.id,
+    );
+    if (oldElements.length === 0) {
+      return;
+    }
+
+    const [minX, minY] = getCommonBounds(oldElements);
+    const drafted = createChartElements(spec, 0, 0);
+    if (!drafted) {
+      return;
+    }
+
+    const [nextMinX, nextMinY] = getCommonBounds(drafted);
+    const dx = minX - nextMinX;
+    const dy = minY - nextMinY;
+    const nextChartElements = drafted.map((element) =>
+      newElementWith(element, {
+        x: element.x + dx,
+        y: element.y + dy,
+      }),
+    );
+
+    const oldIds = new Set(oldElements.map((element) => element.id));
+    const nextElements = [
+      ...this.scene.getElementsIncludingDeleted().map((element) =>
+        oldIds.has(element.id)
+          ? newElementWith(element, { isDeleted: true })
+          : element,
+      ),
+      ...nextChartElements,
+    ];
+
+    syncMovedIndices(nextElements, arrayToMap(nextChartElements));
+    this.store.scheduleCapture();
+    this.scene.replaceAllElements(nextElements);
+    this.setState({
+      ...getSelectionStateForElements(
+        nextChartElements,
+        this.scene.getNonDeletedElements(),
+        this.state,
+      ),
+      editingChart: { chartId: spec.id },
     });
   };
 
@@ -6988,6 +7068,17 @@ class App extends React.Component<AppProps, AppState> {
       event,
       this.state,
     );
+
+    const hitForChart = this.getElementAtPosition(sceneX, sceneY);
+    const chartSpec =
+      getChartSpec(hitForChart) ??
+      (selectedElements.length === 1
+        ? getChartSpec(selectedElements[0])
+        : null);
+    if (chartSpec) {
+      this.setState({ editingChart: { chartId: chartSpec.id } });
+      return;
+    }
 
     if (selectedElements.length === 1 && isLinearElement(selectedElements[0])) {
       const selectedLinearElement: ExcalidrawLinearElement =
@@ -12913,6 +13004,31 @@ class App extends React.Component<AppProps, AppState> {
       this.state,
     );
     const dataTransferList = await parseDataTransferEvent(event);
+
+    const chartDataRaw = dataTransferList.getData(MIME_TYPES.excalidrawChart);
+    let chartType: "bar" | "line" | null = this.pendingChartInsert;
+    if (chartDataRaw) {
+      try {
+        const parsed = JSON.parse(chartDataRaw) as { type?: string };
+        if (parsed?.type === "bar" || parsed?.type === "line") {
+          chartType = parsed.type;
+        }
+      } catch {
+        // ignore invalid payload
+      }
+    }
+    if (!chartType) {
+      const textItem = dataTransferList.findByType(MIME_TYPES.text);
+      const match = textItem?.value?.match(/^excalidraw-chart:(bar|line)$/);
+      if (match) {
+        chartType = match[1] as "bar" | "line";
+      }
+    }
+    if (chartType) {
+      this.pendingChartInsert = null;
+      this.insertChart(chartType, event);
+      return;
+    }
 
     // must be retrieved first, in the same frame
     const fileItems = dataTransferList.getFiles();

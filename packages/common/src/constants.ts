@@ -257,6 +257,8 @@ export const STRING_MIME_TYPES = {
   excalidrawlib: "application/vnd.excalidrawlib+json",
   // list of excalidraw library item ids
   excalidrawlibIds: "application/vnd.excalidrawlib.ids+json",
+  // toolbar chart drop payload
+  excalidrawChart: "application/vnd.excalidraw.chart+json",
 } as const;
 
 export const MIME_TYPES = {
