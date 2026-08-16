@@ -51,6 +51,11 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
   const canvasStreamRef = useRef<MediaStream | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
+  const recordStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const framePendingRef = useRef(false);
+  const lastFrameAtRef = useRef(0);
 
   // 渲染 SVG + 启动动画（侧栏预览）
   useEffect(() => {
@@ -164,17 +169,13 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
     const svgWidth = parseFloat(svg.getAttribute("width") || "800");
     const svgHeight = parseFloat(svg.getAttribute("height") || "600");
 
-    // 录制 canvas 比 SVG 大 10% 余量（避免右侧/下方裁切）
-    const padding = 0.1;
-    const recordW = Math.round(svgWidth * 2 * (1 + padding));
-    const recordH = Math.round(svgHeight * 2 * (1 + padding));
-
     // 不修改 SVG 尺寸，保持原始导出比例
     svg.style.position = "absolute";
     // 居中放置在全屏容器中
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
-    const fitScale = Math.min(viewportW / svgWidth, viewportH / svgHeight) * 0.9;
+    const fitScale =
+      Math.min(viewportW / svgWidth, viewportH / svgHeight) * 0.9;
     const displayW = svgWidth * fitScale;
     const displayH = svgHeight * fitScale;
     svg.style.width = `${displayW}px`;
@@ -193,6 +194,28 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
   // 开始录制：全屏 Modal + captureStream
   const handleStartRecording = useCallback(async () => {
     setRecordError(null);
+    let canvas: HTMLCanvasElement | null = null;
+
+    const cleanupFailedRecording = () => {
+      if (animFrameIdRef.current) {
+        cancelAnimationFrame(animFrameIdRef.current);
+        animFrameIdRef.current = null;
+      }
+      if (canvasStreamRef.current) {
+        canvasStreamRef.current.getTracks().forEach((track) => track.stop());
+        canvasStreamRef.current = null;
+      }
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((track) => track.stop());
+        audioStreamRef.current = null;
+      }
+      recordControllerRef.current?.destroy();
+      recordControllerRef.current = null;
+      mediaRecorderRef.current = null;
+      framePendingRef.current = false;
+      lastFrameAtRef.current = 0;
+      canvas?.remove();
+    };
 
     try {
       // 先显示全屏 Modal
@@ -221,22 +244,25 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
       const svgOrigH = parseFloat(recordSvgEl.getAttribute("height") || "600");
       // canvas 比 SVG 大 10% 余量
       const canvasPadding = 0.1;
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(svgOrigW * 2 * (1 + canvasPadding));
-      canvas.height = Math.round(svgOrigH * 2 * (1 + canvasPadding));
-      canvas.style.display = "none";
-      document.body.appendChild(canvas);
+      canvas = document.createElement("canvas");
+      const recordCanvas = canvas;
+      recordCanvas.width = Math.round(svgOrigW * 2 * (1 + canvasPadding));
+      recordCanvas.height = Math.round(svgOrigH * 2 * (1 + canvasPadding));
+      recordCanvas.style.display = "none";
+      document.body.appendChild(recordCanvas);
 
-      const ctx = canvas.getContext("2d");
+      const ctx = recordCanvas.getContext("2d");
       if (!ctx) {
         setRecordError("无法创建画布");
+        cleanupFailedRecording();
+        setIsRecordFullscreen(false);
         return;
       }
 
       const tracks: MediaStreamTrack[] = [];
 
       // canvas 流
-      canvasStreamRef.current = canvas.captureStream(30);
+      canvasStreamRef.current = recordCanvas.captureStream(30);
       tracks.push(...canvasStreamRef.current.getVideoTracks());
 
       // 音频流
@@ -267,6 +293,10 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
       };
 
       recorder.onstop = () => {
+        if (recordStopTimeoutRef.current) {
+          clearTimeout(recordStopTimeoutRef.current);
+          recordStopTimeoutRef.current = null;
+        }
         // 下载
         const blob = new Blob(recordedChunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(blob);
@@ -296,7 +326,10 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
           recordControllerRef.current.destroy();
           recordControllerRef.current = null;
         }
-        canvas.remove();
+        recordCanvas.remove();
+        framePendingRef.current = false;
+        lastFrameAtRef.current = 0;
+        mediaRecorderRef.current = null;
         setIsRecording(false);
         setIsRecordFullscreen(false);
       };
@@ -313,49 +346,67 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
       // 核心录制循环：每帧将 SVG DOM 直接绘制到 canvas
       // 使用 data URL 方式（serializeToString + Image），因为 animateSvg
       // 现在用 requestAnimationFrame 更新 inline style，序列化能捕获当前状态
-      const drawFrame = () => {
+      const drawFrame = (timestamp: number) => {
         if (!ctx || !recordSvgRef.current) {
-          animFrameIdRef.current = requestAnimationFrame(drawFrame);
           return;
         }
 
-        try {
-          const svgEl = recordSvgRef.current;
-          // 序列化当前 SVG DOM（用原始 width/height 属性，不被 CSS style 覆盖）
-          // 临时移除 CSS width/height 使序列化用原始属性值
-          const savedCssW = svgEl.style.width;
-          const savedCssH = svgEl.style.height;
-          svgEl.style.width = "";
-          svgEl.style.height = "";
+        // MediaRecorder 是 30fps；限制 SVG 序列化并保证同一时刻只解码一帧，
+        // 避免长录制时堆积 Blob/Image 导致 GC 和主线程持续抖动。
+        if (
+          !framePendingRef.current &&
+          timestamp - lastFrameAtRef.current >= 1000 / 30
+        ) {
+          lastFrameAtRef.current = timestamp;
+          framePendingRef.current = true;
+          try {
+            const svgEl = recordSvgRef.current;
+            // 序列化当前 SVG DOM（用原始 width/height 属性，不被 CSS style 覆盖）
+            // 临时移除 CSS width/height 使序列化用原始属性值
+            const savedCssW = svgEl.style.width;
+            const savedCssH = svgEl.style.height;
+            svgEl.style.width = "";
+            svgEl.style.height = "";
 
-          const svgData = new XMLSerializer().serializeToString(svgEl);
-          const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-          const svgUrl = URL.createObjectURL(svgBlob);
+            const svgData = new XMLSerializer().serializeToString(svgEl);
+            const svgBlob = new Blob([svgData], {
+              type: "image/svg+xml;charset=utf-8",
+            });
+            const svgUrl = URL.createObjectURL(svgBlob);
 
-          // 恢复 CSS
-          svgEl.style.width = savedCssW;
-          svgEl.style.height = savedCssH;
+            // 恢复 CSS
+            svgEl.style.width = savedCssW;
+            svgEl.style.height = savedCssH;
 
-          const img = new Image();
-          img.onload = () => {
-            // 白色背景
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            // 缩小到 90% 居中绘制（留余量避免裁切）
-            const scale = 0.9;
-            const dw = canvas.width * scale;
-            const dh = canvas.height * scale;
-            const dx = (canvas.width - dw) / 2;
-            const dy = (canvas.height - dh) / 2;
-            ctx.drawImage(img, dx, dy, dw, dh);
-            URL.revokeObjectURL(svgUrl);
-          };
-          img.onerror = () => {
-            URL.revokeObjectURL(svgUrl);
-          };
-          img.src = svgUrl;
-        } catch (err) {
-          // 忽略单帧错误
+            const img = new Image();
+            img.onload = () => {
+              // 白色背景
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(
+                0,
+                0,
+                recordCanvas.width,
+                recordCanvas.height,
+              );
+              // 缩小到 90% 居中绘制（留余量避免裁切）
+              const scale = 0.9;
+              const dw = recordCanvas.width * scale;
+              const dh = recordCanvas.height * scale;
+              const dx = (recordCanvas.width - dw) / 2;
+              const dy = (recordCanvas.height - dh) / 2;
+              ctx.drawImage(img, dx, dy, dw, dh);
+              URL.revokeObjectURL(svgUrl);
+              framePendingRef.current = false;
+            };
+            img.onerror = () => {
+              URL.revokeObjectURL(svgUrl);
+              framePendingRef.current = false;
+            };
+            img.src = svgUrl;
+          } catch (err) {
+            framePendingRef.current = false;
+            // 忽略单帧错误
+          }
         }
 
         animFrameIdRef.current = requestAnimationFrame(drawFrame);
@@ -364,12 +415,12 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
       // 开始录制
       recorder.start(1000);
       setIsRecording(true);
-      drawFrame();
+      drawFrame(performance.now());
 
       // 自动模式：录制结束后自动停止
       if (mode === "auto" && !loop) {
         const totalDuration = duration + 2000;
-        setTimeout(() => {
+        recordStopTimeoutRef.current = setTimeout(() => {
           if (recorder.state !== "inactive") {
             recorder.stop();
           }
@@ -377,13 +428,17 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
       }
     } catch (err) {
       console.error("Recording failed:", err);
+      cleanupFailedRecording();
       setRecordError(err instanceof Error ? err.message : "录制失败");
       setIsRecordFullscreen(false);
     }
   }, [audioEnabled, duration, loop, mode, prepareRecordSvg]);
 
   const handleStopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop();
     }
   }, []);
@@ -402,7 +457,10 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
   const handleRecordPlayPause = useCallback(() => {
     if (!recordControllerRef.current) return;
     // toggle play/pause
-    const animations = (recordControllerRef.current as unknown as { pause: () => void; play: () => void });
+    const animations = recordControllerRef.current as unknown as {
+      pause: () => void;
+      play: () => void;
+    };
     // 简单方案：手动模式下不用 play/pause，用步进
   }, []);
 
@@ -414,6 +472,9 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
       }
       if (animFrameIdRef.current) {
         cancelAnimationFrame(animFrameIdRef.current);
+      }
+      if (recordStopTimeoutRef.current) {
+        clearTimeout(recordStopTimeoutRef.current);
       }
       if (canvasStreamRef.current) {
         canvasStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -446,13 +507,21 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
           {/* 模式切换 */}
           <div className="animation-panel__mode">
             <button
-              className={mode === "auto" ? "animation-panel__mode-btn--active" : "animation-panel__mode-btn"}
+              className={
+                mode === "auto"
+                  ? "animation-panel__mode-btn--active"
+                  : "animation-panel__mode-btn"
+              }
               onClick={() => handleModeChange("auto")}
             >
               自动播放
             </button>
             <button
-              className={mode === "manual" ? "animation-panel__mode-btn--active" : "animation-panel__mode-btn"}
+              className={
+                mode === "manual"
+                  ? "animation-panel__mode-btn--active"
+                  : "animation-panel__mode-btn"
+              }
               onClick={() => handleModeChange("manual")}
             >
               手动控制
@@ -468,18 +537,39 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
                 title={isPlaying ? "暂停" : "播放"}
               >
                 {isPlaying ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
                     <rect x="6" y="4" width="4" height="16" />
                     <rect x="14" y="4" width="4" height="16" />
                   </svg>
                 ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
                     <path d="M8 5v14l11-7z" />
                   </svg>
                 )}
               </button>
-              <button className="animation-panel__btn" onClick={handleReplay} title="重播">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <button
+                className="animation-panel__btn"
+                onClick={handleReplay}
+                title="重播"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <polyline points="1 4 1 10 7 10" />
                   <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
                 </svg>
@@ -492,12 +582,18 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
                   onChange={(e) => setDuration(Number(e.target.value))}
                 >
                   {durationOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
                   ))}
                 </select>
               </label>
               <label className="animation-panel__checkbox-label">
-                <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={loop}
+                  onChange={(e) => setLoop(e.target.checked)}
+                />
                 循环
               </label>
             </div>
@@ -512,7 +608,14 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
                 disabled={currentStep === 0}
                 title="上一步"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="M15 18l-6-6 6-6" />
                 </svg>
               </button>
@@ -525,12 +628,30 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
                 disabled={currentStep === totalSteps}
                 title="下一步"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="M9 18l6-6-6-6" />
                 </svg>
               </button>
-              <button className="animation-panel__btn" onClick={handleReplay} title="重置">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <button
+                className="animation-panel__btn"
+                onClick={handleReplay}
+                title="重置"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <polyline points="1 4 1 10 7 10" />
                   <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
                 </svg>
@@ -561,7 +682,12 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
                 onClick={() => setIsRecordDialogOpen(true)}
                 title="录制动画"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
                   <circle cx="12" cy="12" r="8" fill="#ef5350" />
                 </svg>
                 <span>录制</span>
@@ -572,14 +698,21 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
                 onClick={handleStopRecording}
                 title="停止并下载"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
                   <rect x="6" y="6" width="12" height="12" rx="1" />
                 </svg>
                 <span>停止并下载</span>
               </button>
             )}
             {isRecording && (
-              <span className="animation-panel__recording-indicator">● 录制中</span>
+              <span className="animation-panel__recording-indicator">
+                ● 录制中
+              </span>
             )}
           </div>
         </div>
@@ -635,7 +768,14 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
                     onClick={handleRecordStepBackward}
                     title="上一步"
                   >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="2"
+                    >
                       <path d="M15 18l-6-6 6-6" />
                     </svg>
                   </button>
@@ -644,7 +784,14 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
                     onClick={handleRecordStepForward}
                     title="下一步"
                   >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="2"
+                    >
                       <path d="M9 18l6-6-6-6" />
                     </svg>
                   </button>
@@ -657,7 +804,9 @@ export const AnimationPanel: React.FC<AnimationPanelProps> = ({
               >
                 停止并下载
               </button>
-              <span className="animation-record-fullscreen__indicator">● 录制中</span>
+              <span className="animation-record-fullscreen__indicator">
+                ● 录制中
+              </span>
             </div>
           )}
         </div>

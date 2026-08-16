@@ -122,6 +122,12 @@
   }
 }
 
+@media (max-width: 700px) {
+  .excalidraw-app {
+    flex-direction: column;
+  }
+}
+
 .plus-button {
   display: flex;
   justify-content: center;

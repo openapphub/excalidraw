@@ -137,11 +137,13 @@ export type SocketUpdateData =
 const RE_COLLAB_LINK = /^#room=([a-zA-Z0-9_-]+),([a-zA-Z0-9_-]+)$/;
 
 export const isCollaborationLink = (link: string) => {
+  if (!link) {
+    return false;
+  }
   try {
     const hash = new URL(link).hash;
     return RE_COLLAB_LINK.test(hash);
-  } catch (error) {
-    console.error(error);
+  } catch {
     return false;
   }
 };
@@ -332,8 +334,10 @@ export const exportToBackend = async (
       maxBytes: FILE_UPLOAD_MAX_BYTES,
     });
 
+    const token = localStorage.getItem("token");
     const response = await fetch(BACKEND_V2_POST, {
       method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: payload.buffer as ArrayBuffer,
     });
     const json = await response.json();

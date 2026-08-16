@@ -7,8 +7,14 @@ import {
   listWorkspaces,
   copyCollectionToWorkspace,
   moveCollectionToWorkspace,
+  getScene,
   type Workspace,
 } from "../../../auth/workspaceApi";
+import { queryClient, queryKeys } from "../../../lib/queryClient";
+import { navigateTo, parseUrl } from "../../../router";
+import { showError } from "../../../utils/toast";
+
+import { getCollectionMoveRedirect } from "../collectionMutationRouting";
 
 import styles from "./CopyMoveDialog.module.scss";
 
@@ -20,6 +26,7 @@ interface CopyMoveDialogProps {
   collectionId: string;
   collectionName: string;
   mode: Mode;
+  onBeforeMutation?: () => Promise<void>;
   onSuccess?: () => void;
 }
 
@@ -29,6 +36,7 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
   collectionId,
   collectionName,
   mode,
+  onBeforeMutation,
   onSuccess,
 }) => {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -55,15 +63,58 @@ export const CopyMoveDialog: React.FC<CopyMoveDialogProps> = ({
 
     setIsLoading(true);
     try {
+      const routeAtSubmit = parseUrl();
+      let currentSceneBelongsToCollection = false;
+      if (routeAtSubmit.type === "scene") {
+        try {
+          const currentScene = await getScene(routeAtSubmit.sceneId);
+          currentSceneBelongsToCollection =
+            currentScene.collectionId === collectionId;
+        } catch (error) {
+          throw new Error("无法验证当前 Scene 的 Collection 归属。", {
+            cause: error,
+          });
+        }
+      }
+      if (currentSceneBelongsToCollection) {
+        await onBeforeMutation?.();
+      }
       if (mode === "copy") {
         await copyCollectionToWorkspace(collectionId, selectedWorkspace);
       } else {
         await moveCollectionToWorkspace(collectionId, selectedWorkspace);
       }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+      ]);
+      if (mode === "move") {
+        const targetWorkspace = workspaces.find(
+          (workspace) => workspace.id === selectedWorkspace,
+        );
+        const currentRoute = parseUrl();
+        if (targetWorkspace) {
+          const redirect = getCollectionMoveRedirect({
+            routeAtStart: routeAtSubmit,
+            currentRoute,
+            collectionId,
+            currentSceneBelongsToCollection,
+            targetWorkspaceSlug: targetWorkspace.slug,
+          });
+          if (redirect) {
+            navigateTo(redirect);
+          }
+        }
+      }
       onSuccess?.();
       onClose();
     } catch (error) {
       console.error("Failed to submit copy/move", error);
+      showError(
+        error instanceof Error
+          ? error.message
+          : t("workspace.updateCollectionError"),
+      );
     } finally {
       setIsLoading(false);
     }

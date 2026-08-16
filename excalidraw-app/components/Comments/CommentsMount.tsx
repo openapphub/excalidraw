@@ -16,6 +16,8 @@
  */
 
 import { useCallback, useEffect } from "react";
+
+import type { ReactNode } from "react";
 import { DefaultSidebar, Sidebar } from "@excalidraw/excalidraw";
 import { messageCircleIcon } from "@excalidraw/excalidraw/components/icons";
 import { useUIAppState } from "@excalidraw/excalidraw/context/ui-appState";
@@ -31,6 +33,7 @@ import {
   isCollaboratingAtom,
 } from "../../collab/Collab";
 import { useCommentSync } from "../../hooks/useCommentSync";
+import { parseUrl } from "../../router";
 import {
   currentSceneIdAtom,
   currentSceneCanEditAtom,
@@ -50,6 +53,8 @@ import type { Socket } from "socket.io-client";
 
 export interface CommentsMountProps {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
+  /** 同一个 DefaultSidebar 宿主中的其他应用标签。 */
+  sidebarExtras?: ReactNode;
   /** 协作 socket（可选）：传入后同房间的评论变更会实时同步 */
   socket?: Socket | null;
   /** 协作房间 id（可选） */
@@ -133,6 +138,7 @@ function useThreadDeepLink(
 
 export const CommentsMount = ({
   excalidrawAPI,
+  sidebarExtras,
   socket: socketProp,
   roomId: roomIdProp,
   isCollaborating: isCollaboratingProp,
@@ -153,8 +159,13 @@ export const CommentsMount = ({
       : collabIsCollaborating;
   const roomId =
     roomIdProp !== undefined ? roomIdProp : (collabAPI?.getRoomId() ?? null);
+  // 内存状态可能在根路径恢复上一条 Scene；评论只能属于 URL 明确指向的 Workspace Scene。
+  const isWorkspaceSceneRoute = parseUrl().type === "scene";
   const sceneReady =
-    isAuthenticated && !!sceneId && sceneId === currentCanvasId;
+    isWorkspaceSceneRoute &&
+    isAuthenticated &&
+    !!sceneId &&
+    sceneId === currentCanvasId;
   const canWriteComments = sceneReady && canEditScene !== false;
 
   useCommentModeShortcut(canWriteComments);
@@ -166,9 +177,11 @@ export const CommentsMount = ({
   );
   useThreadDeepLink(sceneReady ? sceneId : null, excalidrawAPI);
 
-  // 未登录、或尚未成功打开该 scene（非成员 404）不挂评论 UI。
+  // 评论未就绪时不能注册评论 UI，但 DefaultSidebar 仍须保留为其他
+  // 应用标签的宿主。否则演示、录制和动画触发器仍会打开 "default"
+  // 侧栏，却没有对应的 Tab 内容可渲染。
   if (!sceneReady) {
-    return null;
+    return <DefaultSidebar>{sidebarExtras}</DefaultSidebar>;
   }
 
   return (
@@ -193,6 +206,7 @@ export const CommentsMount = ({
             poll={openSidebar?.tab === "comments"}
           />
         </Sidebar.Tab>
+        {sidebarExtras}
       </DefaultSidebar>
 
       {sceneId && (

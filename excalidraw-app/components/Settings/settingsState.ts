@@ -1,4 +1,6 @@
-import { atom } from "../../app-jotai";
+// eslint-disable-next-line no-restricted-imports
+import { atom } from "jotai";
+
 import {
   buildDashboardUrl,
   buildCollectionUrl,
@@ -249,6 +251,9 @@ export const navigateToSceneAtom = atom(
     params: { sceneId: string; title?: string; workspaceSlug?: string },
   ) => {
     const slug = params.workspaceSlug || get(currentWorkspaceSlugAtom);
+    // 旧 Scene 的权限和锁必须保留到切换链路完成最后一次保存。目标 Scene
+    // 会在 useCanvasManagement 保存旧内容后统一 fail-close 并重新校验 ACL。
+    set(isAutoCollabSceneAtom, false);
     set(currentSceneIdAtom, params.sceneId);
     if (params.title) {
       set(currentSceneTitleAtom, params.title);

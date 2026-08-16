@@ -4,15 +4,16 @@
 @use "../../../styles/mixins" as *;
 
 .view {
-  // Define --ui-font locally since dashboard is outside .excalidraw container
-  --ui-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, Segoe UI,
-    Roboto, Helvetica, Arial, sans-serif;
-  font-family: var(--ui-font);
+  @include workspace-page;
+}
 
-  flex: 1;
-  padding: 32px 48px;
-  overflow-y: auto;
-  background: var(--default-bg-color, #fafafa);
+.header,
+.separator,
+.section {
+  width: 100%;
+  max-width: 1440px;
+  margin-right: auto;
+  margin-left: auto;
 }
 
 // Loading state
@@ -40,27 +41,28 @@
 
 // Header
 .header {
+  margin-top: 0;
   margin-bottom: 0;
 }
 
 .separator {
   height: 1px;
   background: var(--default-border-color, #e5e5e5);
-  margin: 24px 0 40px;
+  margin: 24px auto 32px;
 }
 
 .titleRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   margin-bottom: 8px;
 }
 
 .titleGroup {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .icon {
@@ -70,15 +72,15 @@
   color: var(--icon-fill-color, #6b6b6b);
 
   svg {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
   }
 }
 
 .title {
   margin: 0;
-  font-size: 25px;
-  font-weight: 500;
+  font-size: 24px;
+  font-weight: 600;
   color: var(--text-primary-color, #1b1b1f);
 }
 
@@ -102,22 +104,7 @@
 }
 
 .startButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: var(--color-primary, #6965db);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.15s;
-
-  &:hover {
-    background: var(--color-primary-darker, #5b57c5);
-  }
+  @include primary-button;
 
   svg {
     width: 20px;
@@ -127,14 +114,14 @@
 
 // Section
 .section {
-  margin-bottom: 48px;
+  margin-bottom: 36px;
 }
 
 .sectionTitle {
-  margin: 0 0 20px;
-  font-size: 18px;
+  margin: 0 0 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary, #6965db);
+  color: var(--text-primary-color, #1b1b1f);
 }
 
 // Team empty state
@@ -143,8 +130,30 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px;
+  padding: 40px 24px;
   text-align: center;
+}
+
+@media (max-width: 640px) {
+  .view {
+    padding: 24px 16px 36px;
+  }
+
+  .titleRow {
+    align-items: flex-start;
+  }
+
+  .startButton span {
+    display: none;
+  }
+
+  .separator {
+    margin-block: 20px 28px;
+  }
+
+  .section {
+    margin-bottom: 28px;
+  }
 }
 
 .teamEmptyIllustration {

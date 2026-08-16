@@ -202,8 +202,15 @@ const SceneGridCard: React.FC<SceneGridCardProps> = ({
           ) : (
             <h3 className={styles.title}>{scene.title}</h3>
           )}
-          {!scene.isPublic && !isRenaming && (
-            <span className={styles.private} title={t("workspace.private")}>
+          {scene.editor && !isRenaming && (
+            <span
+              className={styles.editLock}
+              title={
+                scene.editor.isSelf
+                  ? "你正在编辑"
+                  : `${scene.editor.name || "其他成员"} 正在编辑`
+              }
+            >
               {lockIcon}
             </span>
           )}

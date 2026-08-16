@@ -8,6 +8,7 @@ import { isExcalidrawPlusSignedUser } from "../app_constants";
 import { useAuth } from "../auth";
 import { useAtomValue } from "../app-jotai";
 import { currentCanvasIdAtom } from "../app-jotai";
+import { parseUrl } from "../router";
 import { currentSceneIdAtom } from "./Settings/settingsState";
 
 import { DebugFooter, isVisualDebuggerEnabled } from "./DebugCanvas";
@@ -71,7 +72,10 @@ const AppFooterLeft = React.memo(
     const sceneId = useAtomValue(currentSceneIdAtom);
     const currentCanvasId = useAtomValue(currentCanvasIdAtom);
     const showComments =
-      isAuthenticated && !!sceneId && sceneId === currentCanvasId;
+      parseUrl().type === "scene" &&
+      isAuthenticated &&
+      !!sceneId &&
+      sceneId === currentCanvasId;
 
     const handleToggleComments = () => {
       excalidrawAPI?.toggleSidebar({ name: "default", tab: "comments" });

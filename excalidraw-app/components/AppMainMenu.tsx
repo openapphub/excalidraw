@@ -1,17 +1,18 @@
 import React from "react";
 import { MainMenu } from "@excalidraw/excalidraw/index";
 
-import {
-  GithubIcon,
-  saveAs,
-  settingsIcon,
-} from "@excalidraw/excalidraw/components/icons";
+import { GithubIcon, saveAs } from "@excalidraw/excalidraw/components/icons";
 
 import DropdownMenuItemLink from "@excalidraw/excalidraw/components/dropdownMenu/DropdownMenuItemLink";
 
 import type { Theme } from "@excalidraw/element/types";
 
-import { useAtom, useSetAtom, userAtom, saveAsDialogAtom } from "../app-jotai";
+import {
+  useAtom,
+  useSetAtom,
+  userAtom,
+  saveAsDialogAtom,
+} from "../app-jotai";
 import { LanguageList } from "../app-language/LanguageList";
 
 import { openWorkspaceSidebarAtom } from "./Settings/settingsState";
@@ -32,7 +33,6 @@ export const AppMainMenu: React.FC<{
   theme: Theme | "system";
   setTheme: (theme: Theme | "system") => void;
   refresh: () => void;
-  onStorageSettingsClick: () => void;
 }> = React.memo((props) => {
   const [user, setUser] = useAtom(userAtom);
   const setSaveAsDialog = useSetAtom(saveAsDialogAtom);
@@ -59,12 +59,14 @@ export const AppMainMenu: React.FC<{
       <MainMenu.Separator />
       <MainMenu.DefaultItems.LoadScene />
       <MainMenu.DefaultItems.SaveToActiveFile />
-      <MainMenu.Item
-        onSelect={() => setSaveAsDialog({ isOpen: true })}
-        icon={saveAs}
-      >
-        Save as New Canvas...
-      </MainMenu.Item>
+      {!user && (
+        <MainMenu.Item
+          onSelect={() => setSaveAsDialog({ isOpen: true })}
+          icon={saveAs}
+        >
+          Save as New Canvas...
+        </MainMenu.Item>
+      )}
       <MainMenu.DefaultItems.Export />
       {props.isCollabEnabled && (
         <MainMenu.DefaultItems.LiveCollaborationTrigger
@@ -76,13 +78,6 @@ export const AppMainMenu: React.FC<{
       <MainMenu.DefaultItems.SearchMenu />
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
-      <MainMenu.Separator />
-      <MainMenu.Item
-        onSelect={props.onStorageSettingsClick}
-        icon={settingsIcon}
-      >
-        Data Source Settings...
-      </MainMenu.Item>
       <MainMenu.Separator />
       {user ? (
         <div

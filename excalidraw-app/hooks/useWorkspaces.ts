@@ -1,7 +1,7 @@
 import { useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useAtom, useSetAtom, useAtomValue } from "../app-jotai";
+import { appJotaiStore, useAtom, useSetAtom, useAtomValue } from "../app-jotai";
 import {
   currentWorkspaceSlugAtom,
   workspacesAtom,
@@ -16,12 +16,19 @@ import {
   type Workspace,
   type WorkspaceType,
 } from "../auth/workspaceApi";
+import { navigateTo, parseUrl } from "../router";
+import {
+  canCommitWorkspaceMutation,
+  getWorkspaceDeleteRedirect,
+} from "../components/Workspace/workspaceMutationRouting";
 
 interface CreateWorkspaceData {
   name: string;
   slug: string;
   type: WorkspaceType;
 }
+
+const EMPTY_WORKSPACES: Workspace[] = [];
 
 interface UseWorkspacesOptions {
   isAuthenticated: boolean;
@@ -73,7 +80,7 @@ export function useWorkspaces({
 
   // React Query for fetching workspaces
   const {
-    data: fetchedWorkspaces = [],
+    data: fetchedWorkspaces = EMPTY_WORKSPACES,
     isLoading,
     refetch,
   } = useQuery({
@@ -88,27 +95,45 @@ export function useWorkspaces({
 
   // Sync React Query data to Jotai atom (for components that read from atom)
   useEffect(() => {
-    if (fetchedWorkspaces.length > 0) {
-      setWorkspaces(fetchedWorkspaces as WorkspaceData[]);
-
-      // Auto-select workspace based on URL slug or default to first
-      if (!currentWorkspace) {
-        // Check if we have a workspace slug from URL (set before workspaces loaded)
-        if (currentWorkspaceSlugFromAtom) {
-          const workspaceFromUrl = fetchedWorkspaces.find(
-            (w) => w.slug === currentWorkspaceSlugFromAtom,
-          );
-          if (workspaceFromUrl) {
-            setCurrentWorkspaceAtom(workspaceFromUrl as WorkspaceData);
-            return;
-          }
-        }
-        // Fallback to first workspace
-        setCurrentWorkspaceAtom(fetchedWorkspaces[0] as WorkspaceData);
-        setCurrentWorkspaceSlug(fetchedWorkspaces[0].slug);
+    if (!isAuthenticated) {
+      setWorkspaces([]);
+      if (currentWorkspace) {
+        setCurrentWorkspaceAtom(null);
       }
+      return;
+    }
+    setWorkspaces(fetchedWorkspaces as WorkspaceData[]);
+
+    // URL slug 是当前 Workspace 的权威来源；无匹配项时必须清空旧选择，
+    // 不能在一个无效/已删除的 URL 下继续展示上一个 Workspace 的缓存。
+    if (currentWorkspaceSlugFromAtom) {
+      const workspaceFromUrl = fetchedWorkspaces.find(
+        (w) => w.slug === currentWorkspaceSlugFromAtom,
+      );
+      if (workspaceFromUrl) {
+        if (workspaceFromUrl.id !== currentWorkspace?.id) {
+          setCurrentWorkspaceAtom(workspaceFromUrl as WorkspaceData);
+        }
+      } else if (currentWorkspace) {
+        setCurrentWorkspaceAtom(null);
+      }
+      return;
+    }
+
+    if (fetchedWorkspaces.length === 0) {
+      if (currentWorkspace) {
+        setCurrentWorkspaceAtom(null);
+      }
+      return;
+    }
+
+    // 没有 URL 指定或首次进入时回退到第一个工作区。
+    if (!currentWorkspace) {
+      setCurrentWorkspaceAtom(fetchedWorkspaces[0] as WorkspaceData);
+      setCurrentWorkspaceSlug(fetchedWorkspaces[0].slug);
     }
   }, [
+    isAuthenticated,
     fetchedWorkspaces,
     currentWorkspace,
     currentWorkspaceSlugFromAtom,
@@ -121,9 +146,7 @@ export function useWorkspaces({
   const setCurrentWorkspace = useCallback(
     (workspace: Workspace | WorkspaceData | null) => {
       setCurrentWorkspaceAtom(workspace as WorkspaceData | null);
-      if (workspace) {
-        setCurrentWorkspaceSlug(workspace.slug);
-      }
+      setCurrentWorkspaceSlug(workspace?.slug ?? null);
     },
     [setCurrentWorkspaceAtom, setCurrentWorkspaceSlug],
   );
@@ -154,16 +177,15 @@ export function useWorkspaces({
       });
 
       // Invalidate and refetch workspaces list
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.workspaces.all,
-      });
-
-      // Switch to new workspace
-      setCurrentWorkspace(workspace);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+      ]);
 
       return workspace;
     },
-    [queryClient, setCurrentWorkspace],
+    [queryClient],
   );
 
   // Generate slug from workspace name
@@ -180,24 +202,49 @@ export function useWorkspaces({
   // Delete workspace
   const deleteWorkspace = useCallback(
     async (workspaceId: string): Promise<void> => {
+      const workspaceAtStart = appJotaiStore.get(currentWorkspaceAtom);
       await deleteWorkspaceApi(workspaceId);
+      const updatedWorkspaces = await listWorkspaces();
+      const currentWorkspaceAfterDelete =
+        appJotaiStore.get(currentWorkspaceAtom);
+      const currentRoute = parseUrl();
+      const selectedFallback = updatedWorkspaces.find(
+        (workspace) => workspace.id === currentWorkspaceAfterDelete?.id,
+      );
+      const fallbackWorkspace =
+        selectedFallback ?? updatedWorkspaces[0] ?? null;
 
-      // Invalidate and refetch workspaces list
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.workspaces.all,
-      });
-
-      // Get updated workspaces and switch to first remaining one
-      const updatedWorkspaces = await queryClient.fetchQuery({
-        queryKey: queryKeys.workspaces.list(),
-        queryFn: listWorkspaces,
-      });
-
-      if (updatedWorkspaces.length > 0) {
-        setCurrentWorkspace(updatedWorkspaces[0]);
-      } else {
-        setCurrentWorkspace(null);
+      if (
+        workspaceAtStart?.id === workspaceId &&
+        canCommitWorkspaceMutation({
+          mutationWorkspaceId: workspaceId,
+          mutationWorkspaceSlug: workspaceAtStart.slug,
+          currentWorkspaceId: currentWorkspaceAfterDelete?.id ?? null,
+          currentRoute,
+        })
+      ) {
+        setCurrentWorkspace(fallbackWorkspace);
       }
+
+      if (workspaceAtStart?.id === workspaceId) {
+        const redirect = getWorkspaceDeleteRedirect({
+          deletedWorkspaceSlug: workspaceAtStart.slug,
+          currentRoute,
+          fallbackWorkspaceSlug: fallbackWorkspace?.slug ?? null,
+        });
+        if (redirect) {
+          navigateTo(redirect);
+        }
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.notifications.all,
+        }),
+      ]);
     },
     [queryClient, setCurrentWorkspace],
   );

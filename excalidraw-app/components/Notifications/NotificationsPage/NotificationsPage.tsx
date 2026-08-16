@@ -1,19 +1,18 @@
 import React, { useEffect, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { t } from "@excalidraw/excalidraw/i18n";
 
-import { useAtomValue } from "../../../app-jotai";
 import {
   useNotifications,
   useNotificationMutations,
 } from "../../../hooks/useNotifications";
-import { currentWorkspaceSlugAtom } from "../../Settings/settingsState";
-import {
-  buildSceneUrlWithThread,
-  buildSceneUrl,
-  navigateTo,
-} from "../../../router";
+import { navigateTo } from "../../../router";
+import { queryKeys } from "../../../lib/queryClient";
+import { showError } from "../../../utils/toast";
+import { bellIcon } from "../../Workspace/WorkspaceSidebar/icons";
 import { NotificationSkeletonList } from "../Skeletons";
+import { resolveNotificationUrl } from "../notificationNavigation";
 
 import { NotificationTimelineItem } from "./NotificationTimelineItem";
 
@@ -25,7 +24,7 @@ import styles from "./NotificationsPage.module.scss";
  */
 export const NotificationsPage: React.FC = () => {
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  const workspaceSlug = useAtomValue(currentWorkspaceSlugAtom);
+  const queryClient = useQueryClient();
 
   const {
     notifications,
@@ -78,22 +77,20 @@ export const NotificationsPage: React.FC = () => {
       await markAsRead(notification.id);
     }
 
-    // Navigate to the scene (with thread deep link if available)
-    if (workspaceSlug) {
-      if (notification.thread?.id) {
-        // Navigate with thread deep link - URL routing will handle opening comments sidebar
-        const url = buildSceneUrlWithThread(
-          workspaceSlug,
-          notification.scene.id,
-          notification.thread.id,
-          notification.comment?.id,
-        );
-        navigateTo(url);
-      } else {
-        // Navigate to scene without thread
-        const url = buildSceneUrl(workspaceSlug, notification.scene.id);
-        navigateTo(url);
-      }
+    try {
+      navigateTo(
+        await resolveNotificationUrl({
+          sceneId: notification.scene.id,
+          threadId: notification.thread?.id,
+          commentId: notification.comment?.id,
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to open notification scene:", error);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.notifications.all,
+      });
+      showError(t("notifications.sceneUnavailable"));
     }
   };
 
@@ -101,12 +98,16 @@ export const NotificationsPage: React.FC = () => {
     <div className={styles.page}>
       <h1 className={styles.title}>{t("notifications.title")}</h1>
 
-      <div className={styles.timeline}>
+      <div
+        className={`${styles.timeline} ${
+          !isLoading && notifications.length === 0 ? styles.timelineEmpty : ""
+        }`}
+      >
         {isLoading ? (
           <NotificationSkeletonList count={5} />
         ) : notifications.length === 0 ? (
           <div className={styles.empty}>
-            <div className={styles.emptyIcon}>🔔</div>
+            <div className={styles.emptyIcon}>{bellIcon}</div>
             <p>{t("notifications.empty")}</p>
           </div>
         ) : (

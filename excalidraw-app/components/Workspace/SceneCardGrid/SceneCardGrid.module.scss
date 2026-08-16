@@ -10,8 +10,8 @@
   font-family: var(--ui-font);
 
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
   padding: 0;
 }
 
@@ -42,18 +42,19 @@
   position: relative;
   background: var(--island-bg-color, #fff);
   border: 1px solid var(--default-border-color, #e5e5e5);
-  border-radius: 16px;
+  border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+  box-shadow: 0 1px 2px rgba(27, 27, 31, 0.04);
+  transition: box-shadow 0.15s, border-color 0.15s;
 
   &:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
-    border-color: var(--color-primary-light, rgba(105, 101, 219, 0.3));
+    box-shadow: 0 6px 18px rgba(27, 27, 31, 0.1);
+    border-color: rgba(105, 101, 219, 0.4);
   }
 
-  &:hover .menuTrigger {
+  &:hover .menuTrigger,
+  &:focus-within .menuTrigger {
     opacity: 1;
   }
 
@@ -69,13 +70,15 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 10;
-  background: var(--default-bg-color, #f5f5f5);
+  background: #fff;
+  border-bottom: 1px solid var(--default-border-color, #e5e5e5);
   overflow: hidden;
 
   img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    background: #fff;
   }
 }
 
@@ -98,11 +101,13 @@
   position: absolute;
   bottom: 8px;
   right: 8px;
-  padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.6);
+  min-height: 20px;
+  padding: 2px 6px;
+  background: rgba(27, 27, 31, 0.72);
   color: white;
   font-size: 11px;
   border-radius: 4px;
+  line-height: 16px;
 }
 
 // Info section
@@ -140,9 +145,16 @@
   color: var(--text-primary-color, #1b1b1f);
 }
 
-.private {
+.editLock {
   flex-shrink: 0;
-  color: var(--icon-fill-color, #6b6b6b);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(224, 49, 49, 0.08);
+  color: var(--color-danger, #e03131);
 
   svg {
     width: 14px;
@@ -176,16 +188,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   background: rgba(255, 255, 255, 0.9);
-  border: none;
+  border: 1px solid rgba(27, 27, 31, 0.08);
   border-radius: 6px;
   cursor: pointer;
   color: var(--icon-fill-color, #5f5f5f);
   opacity: 0;
   transition: opacity 0.15s, background-color 0.15s;
   backdrop-filter: blur(4px);
+
+  @include focus-visible-ring;
 
   &:hover {
     background: rgba(255, 255, 255, 1);
@@ -269,7 +283,8 @@
   }
 
   .thumbnail {
-    background: var(--default-bg-color, #2d2d33);
+    background: #fff;
+    border-bottom-color: var(--default-border-color, #3d3d3d);
   }
 
   .title {
@@ -280,6 +295,11 @@
     background: var(--island-bg-color, #232329);
     color: var(--text-primary-color, #e1e1e1);
     border-color: var(--color-primary, #a5a1ff);
+  }
+
+  .editLock {
+    background: rgba(255, 107, 107, 0.12);
+    color: var(--color-danger, #ff6b6b);
   }
 
   .menuTrigger {
@@ -305,5 +325,16 @@
 
   .menuDivider {
     background: var(--default-border-color, #3d3d3d);
+  }
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .menuTrigger {
+    opacity: 1;
   }
 }

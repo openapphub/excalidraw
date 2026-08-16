@@ -166,15 +166,16 @@ export function useCommentMutations(
   // Create Thread
   // -------------------------------------------------------------------------
   const createMutation = useMutation({
+    onMutate: () => ({ queryKey, emitEvent }),
     mutationFn: (dto: CreateThreadDto) => createThread(sceneId!, dto),
-    onSuccess: (newThread) => {
+    onSuccess: (newThread, _dto, context) => {
       // Add the new thread to the cache
-      queryClient.setQueryData<CommentThread[]>(queryKey, (prev) =>
+      queryClient.setQueryData<CommentThread[]>(context.queryKey, (prev) =>
         prev ? [...prev, newThread] : [newThread],
       );
 
       // Broadcast to collaborators
-      emitEvent?.({ type: "thread-created", thread: newThread });
+      context.emitEvent?.({ type: "thread-created", thread: newThread });
     },
   });
 
@@ -196,17 +197,17 @@ export function useCommentMutations(
         (prev) => prev?.filter((t) => t.id !== threadId) ?? [],
       );
 
-      return { previous };
+      return { queryKey, emitEvent, previous };
     },
     onError: (_err, _threadId, context) => {
       // Rollback on error
       if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous);
+        queryClient.setQueryData(context.queryKey, context.previous);
       }
     },
-    onSuccess: (_data, threadId) => {
+    onSuccess: (_data, threadId, context) => {
       // Broadcast to collaborators
-      emitEvent?.({ type: "thread-deleted", threadId });
+      context.emitEvent?.({ type: "thread-deleted", threadId });
     },
     onSettled: () => {
       // Refetch to ensure consistency
@@ -241,25 +242,25 @@ export function useCommentMutations(
           ) ?? [],
       );
 
-      return { previous };
+      return { queryKey, emitEvent, previous };
     },
     onError: (_err, _vars, context) => {
       // Rollback on error
       if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous);
+        queryClient.setQueryData(context.queryKey, context.previous);
       }
     },
-    onSuccess: (updatedThread) => {
+    onSuccess: (updatedThread, _vars, context) => {
       // Update with server response to ensure consistency
       queryClient.setQueryData<CommentThread[]>(
-        queryKey,
+        context.queryKey,
         (prev) =>
           prev?.map((t) => (t.id === updatedThread.id ? updatedThread : t)) ??
           [],
       );
 
       // Broadcast to collaborators
-      emitEvent?.({
+      context.emitEvent?.({
         type: "thread-resolved",
         threadId: updatedThread.id,
         resolved: updatedThread.resolved,
@@ -300,17 +301,17 @@ export function useCommentMutations(
           prev?.map((t) => (t.id === threadId ? { ...t, x, y } : t)) ?? [],
       );
 
-      return { previous };
+      return { queryKey, emitEvent, previous };
     },
     onError: (_err, _vars, context) => {
       // Rollback on error
       if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous);
+        queryClient.setQueryData(context.queryKey, context.previous);
       }
     },
-    onSuccess: (_data, { threadId, x, y }) => {
+    onSuccess: (_data, { threadId, x, y }, context) => {
       // Broadcast to collaborators
-      emitEvent?.({ type: "thread-moved", threadId, x, y });
+      context.emitEvent?.({ type: "thread-moved", threadId, x, y });
     },
   });
 
@@ -318,6 +319,7 @@ export function useCommentMutations(
   // Add Comment
   // -------------------------------------------------------------------------
   const addCommentMutation = useMutation({
+    onMutate: () => ({ queryKey, emitEvent }),
     mutationFn: ({
       threadId,
       dto,
@@ -325,10 +327,10 @@ export function useCommentMutations(
       threadId: string;
       dto: CreateCommentDto;
     }) => addComment(threadId, dto),
-    onSuccess: (newComment, { threadId }) => {
+    onSuccess: (newComment, { threadId }, context) => {
       // Add the comment to the thread in cache
       queryClient.setQueryData<CommentThread[]>(
-        queryKey,
+        context.queryKey,
         (prev) =>
           prev?.map((t) =>
             t.id === threadId
@@ -343,7 +345,11 @@ export function useCommentMutations(
       );
 
       // Broadcast to collaborators
-      emitEvent?.({ type: "comment-added", threadId, comment: newComment });
+      context.emitEvent?.({
+        type: "comment-added",
+        threadId,
+        comment: newComment,
+      });
     },
   });
 
@@ -351,6 +357,7 @@ export function useCommentMutations(
   // Update Comment
   // -------------------------------------------------------------------------
   const updateCommentMutation = useMutation({
+    onMutate: () => ({ queryKey, emitEvent }),
     mutationFn: ({
       commentId,
       dto,
@@ -358,10 +365,10 @@ export function useCommentMutations(
       commentId: string;
       dto: UpdateCommentDto;
     }) => updateComment(commentId, dto),
-    onSuccess: (updatedComment) => {
+    onSuccess: (updatedComment, _vars, context) => {
       // Update the comment in the thread
       queryClient.setQueryData<CommentThread[]>(
-        queryKey,
+        context.queryKey,
         (prev) =>
           prev?.map((t) =>
             t.id === updatedComment.threadId
@@ -376,7 +383,7 @@ export function useCommentMutations(
       );
 
       // Broadcast to collaborators
-      emitEvent?.({
+      context.emitEvent?.({
         type: "comment-updated",
         commentId: updatedComment.id,
         threadId: updatedComment.threadId,
@@ -411,16 +418,16 @@ export function useCommentMutations(
           ) ?? [],
       );
 
-      return { previous };
+      return { queryKey, emitEvent, previous };
     },
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous);
+        queryClient.setQueryData(context.queryKey, context.previous);
       }
     },
-    onSuccess: (_data, { threadId, commentId }) => {
+    onSuccess: (_data, { threadId, commentId }, context) => {
       // Broadcast to collaborators
-      emitEvent?.({ type: "comment-deleted", threadId, commentId });
+      context.emitEvent?.({ type: "comment-deleted", threadId, commentId });
     },
   });
 

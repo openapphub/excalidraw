@@ -27,6 +27,19 @@ export interface AnimateController {
   destroy: () => void;
 }
 
+const emptyAnimationController: AnimateController = {
+  cancel: () => undefined,
+  pause: () => undefined,
+  play: () => undefined,
+  seek: () => undefined,
+  stepForward: () => undefined,
+  stepBackward: () => undefined,
+  getTotalSteps: () => 0,
+  getCurrentStep: () => 0,
+  goToStep: () => undefined,
+  destroy: () => undefined,
+};
+
 interface PathAnimState {
   path: SVGPathElement;
   length: number;
@@ -61,6 +74,9 @@ export const animateSvg = (
     const tag = el.tagName.toLowerCase();
     return tag !== "defs" && tag !== "style" && tag !== "metadata";
   }) as SVGElement[];
+  if (children.length === 0) {
+    return emptyAnimationController;
+  }
 
   // 初始化：隐藏所有元素
   children.forEach((el) => {
@@ -151,7 +167,11 @@ export const animateSvg = (
   let isAutoRunning = false;
 
   // 更新单个元素在某时间点的状态
-  const updateElementAtTime = (state: ElementState, delay: number, globalTime: number) => {
+  const updateElementAtTime = (
+    state: ElementState,
+    delay: number,
+    globalTime: number,
+  ) => {
     const localTime = globalTime - delay;
     if (localTime < 0) {
       // 尚未开始
@@ -223,7 +243,9 @@ export const animateSvg = (
     });
 
     // 检查是否全部完成
-    const totalDuration = elementDelays[elementDelays.length - 1] + elementStates[elementStates.length - 1].duration;
+    const totalDuration =
+      elementDelays[elementDelays.length - 1] +
+      elementStates[elementStates.length - 1].duration;
     if (elapsed >= totalDuration) {
       if (opts.loop) {
         // 重置
@@ -280,7 +302,10 @@ export const animateSvg = (
             ps.currentOffset = offset;
 
             if (ps.hasFill) {
-              const fillProgress = Math.max(0, Math.min(1, (progress - 0.8) / 0.2));
+              const fillProgress = Math.max(
+                0,
+                Math.min(1, (progress - 0.8) / 0.2),
+              );
               ps.path.style.fillOpacity = `${fillProgress}`;
               ps.currentFillOpacity = fillProgress;
             }

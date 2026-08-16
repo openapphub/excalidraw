@@ -1,6 +1,5 @@
 import React, { useEffect, useCallback } from "react";
 import { t } from "@excalidraw/excalidraw/i18n";
-import { useTunnels } from "@excalidraw/excalidraw";
 import { useUIAppState } from "@excalidraw/excalidraw/context/ui-appState";
 
 import { useAtomValue, useSetAtom } from "../../../app-jotai";
@@ -24,7 +23,6 @@ const sidebarIcon = (
 
 export const WorkspaceSidebarTrigger: React.FC = () => {
   const { isAuthenticated } = useAuth();
-  const { WorkspaceTriggerTunnel } = useTunnels();
   const appState = useUIAppState();
 
   // 本仓 UIAppState 暂无 presentationMode 字段，保留可选读取以兼容上游演示模式
@@ -77,22 +75,19 @@ export const WorkspaceSidebarTrigger: React.FC = () => {
     return null;
   }
 
-  // Render through tunnel to place before hamburger menu
   return (
-    <WorkspaceTriggerTunnel.In>
-      <div className={styles.trigger}>
-        <button
-          type="button"
-          className={buttonClasses}
-          onClick={toggleSidebar}
-          aria-label={t("workspace.title")}
-          aria-pressed={isOpen}
-          title={`${t("workspace.title")} (\` or ⌘[)`}
-        >
-          {sidebarIcon}
-        </button>
-      </div>
-    </WorkspaceTriggerTunnel.In>
+    <div className={styles.trigger}>
+      <button
+        type="button"
+        className={buttonClasses}
+        onClick={toggleSidebar}
+        aria-label={t("workspace.title")}
+        aria-pressed={isOpen}
+        title={`${t("workspace.title")} (\` or ⌘[)`}
+      >
+        {sidebarIcon}
+      </button>
+    </div>
   );
 };
 

@@ -1,5 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 
+import { appJotaiStore, userAtom } from "../app-jotai";
+
 /**
  * Query client with default options for AstraDraw.
  *
@@ -18,6 +20,18 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: true,
     },
   },
+});
+
+// 查询键按资源组织，不携带用户 ID。身份在同一 SPA 内变化时必须同步清空，
+// 避免新用户首次渲染命中上一用户的 Workspace、Scene 或个人资料缓存。
+let queryCacheUserId = appJotaiStore.get(userAtom)?.id ?? null;
+appJotaiStore.sub(userAtom, () => {
+  const nextUserId = appJotaiStore.get(userAtom)?.id ?? null;
+  if (nextUserId === queryCacheUserId) {
+    return;
+  }
+  queryCacheUserId = nextUserId;
+  queryClient.clear();
 });
 
 /**

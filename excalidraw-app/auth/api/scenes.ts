@@ -2,7 +2,9 @@
  * Scene API - CRUD operations for scenes
  */
 
-import { apiRequest, apiRequestRaw, jsonBody, binaryBody } from "./client";
+import { sceneClientHeaders } from "../sceneClient";
+
+import { apiRequest, apiRequestRaw, jsonBody } from "./client";
 
 import type { WorkspaceScene, CreateSceneDto, UpdateSceneDto } from "./types";
 
@@ -56,6 +58,7 @@ export async function updateScene(
 ): Promise<WorkspaceScene> {
   return apiRequest(`/workspace/scenes/${id}`, {
     method: "PUT",
+    headers: sceneClientHeaders(),
     ...jsonBody(dto),
     errorMessage: "Failed to update scene",
   });
@@ -70,7 +73,11 @@ export async function updateSceneData(
 ): Promise<{ success: boolean }> {
   return apiRequest(`/workspace/scenes/${id}/data`, {
     method: "PUT",
-    ...binaryBody(data),
+    headers: {
+      ...sceneClientHeaders(),
+      "Content-Type": "application/octet-stream",
+    },
+    body: data,
     errorMessage: "Failed to update scene data",
   });
 }
@@ -86,7 +93,11 @@ export async function uploadSceneThumbnail(
 ): Promise<{ thumbnailUrl: string }> {
   return apiRequest(`/workspace/scenes/${id}/thumbnail`, {
     method: "PUT",
-    ...binaryBody(thumbnailBlob),
+    headers: {
+      ...sceneClientHeaders(),
+      "Content-Type": "application/octet-stream",
+    },
+    body: thumbnailBlob,
     errorMessage: "Failed to upload thumbnail",
   });
 }
@@ -97,6 +108,7 @@ export async function uploadSceneThumbnail(
 export async function deleteScene(id: string): Promise<{ success: boolean }> {
   return apiRequest(`/workspace/scenes/${id}`, {
     method: "DELETE",
+    headers: sceneClientHeaders(),
     errorMessage: "Failed to delete scene",
   });
 }
@@ -147,15 +159,19 @@ export async function releaseSceneLock(
   id: string,
   clientId: string,
 ): Promise<void> {
-  await apiRequest(`/workspace/scenes/${id}/lock?clientId=${encodeURIComponent(clientId)}`, {
-    method: "DELETE",
-    errorMessage: "Failed to release scene lock",
-  });
+  await apiRequest(
+    `/workspace/scenes/${id}/lock?clientId=${encodeURIComponent(clientId)}`,
+    {
+      method: "DELETE",
+      errorMessage: "Failed to release scene lock",
+    },
+  );
 }
 
 export async function enableSceneCollab(id: string): Promise<WorkspaceScene> {
   return apiRequest(`/workspace/scenes/${id}/collab`, {
     method: "POST",
+    headers: sceneClientHeaders(),
     errorMessage: "Failed to enable scene collaboration",
   });
 }
@@ -163,6 +179,7 @@ export async function enableSceneCollab(id: string): Promise<WorkspaceScene> {
 export async function disableSceneCollab(id: string): Promise<WorkspaceScene> {
   return apiRequest(`/workspace/scenes/${id}/collab`, {
     method: "DELETE",
+    headers: sceneClientHeaders(),
     errorMessage: "Failed to disable scene collaboration",
   });
 }
@@ -224,6 +241,7 @@ export async function moveScene(
 ): Promise<WorkspaceScene> {
   return apiRequest(`/workspace/scenes/${sceneId}/move`, {
     method: "PUT",
+    headers: sceneClientHeaders(),
     ...jsonBody({ collectionId }),
     errorMessage: "Failed to move scene",
   });

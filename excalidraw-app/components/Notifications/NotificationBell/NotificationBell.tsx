@@ -1,20 +1,19 @@
 import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { t } from "@excalidraw/excalidraw/i18n";
 
 import { useAtom } from "../../../app-jotai";
 
 import { useUnreadCount } from "../../../hooks/useNotifications";
-import {
-  buildNotificationsUrl,
-  buildSceneUrl,
-  buildSceneUrlWithThread,
-  navigateTo,
-} from "../../../router";
+import { buildNotificationsUrl, navigateTo } from "../../../router";
+import { queryKeys } from "../../../lib/queryClient";
+import { showError } from "../../../utils/toast";
 import { isNotificationPopupOpenAtom } from "../notificationsState";
 import { NotificationBadge } from "../NotificationBadge";
 import { NotificationPopup } from "../NotificationPopup";
 import { bellIcon } from "../../Workspace/WorkspaceSidebar/icons";
+import { resolveNotificationUrl } from "../notificationNavigation";
 
 import styles from "./NotificationBell.module.scss";
 
@@ -26,7 +25,11 @@ interface NotificationBellProps {
   /** Current app mode - determines click behavior */
   appMode?: "canvas" | "dashboard";
   /** Callback when navigating to a notification */
-  onNavigate?: (sceneId: string, threadId?: string, commentId?: string) => void;
+  onNavigate?: (
+    sceneId: string,
+    threadId?: string,
+    commentId?: string,
+  ) => void | Promise<void>;
 }
 
 /**
@@ -46,6 +49,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   onNavigate,
 }) => {
   const [isPopupOpen, setIsPopupOpen] = useAtom(isNotificationPopupOpenAtom);
+  const queryClient = useQueryClient();
   const { count } = useUnreadCount({ enabled });
 
   const handleClick = () => {
@@ -62,15 +66,18 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   // CommentsMount 会消费这两个参数并自动选中线程。
   const handleNavigate =
     onNavigate ??
-    ((sceneId: string, threadId?: string, commentId?: string) => {
-      if (!workspaceSlug) {
-        return;
+    (async (sceneId: string, threadId?: string, commentId?: string) => {
+      try {
+        navigateTo(
+          await resolveNotificationUrl({ sceneId, threadId, commentId }),
+        );
+      } catch (error) {
+        console.error("Failed to open notification scene:", error);
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.notifications.all,
+        });
+        showError(t("notifications.sceneUnavailable"));
       }
-      navigateTo(
-        threadId
-          ? buildSceneUrlWithThread(workspaceSlug, sceneId, threadId, commentId)
-          : buildSceneUrl(workspaceSlug, sceneId),
-      );
     });
 
   return (

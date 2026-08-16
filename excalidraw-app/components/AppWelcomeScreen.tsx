@@ -12,6 +12,12 @@ export const AppWelcomeScreen: React.FC<{
   const { t } = useI18n();
   const [user] = useAtom(userAtom);
 
+  // 未登录画布仅保存在浏览器中，官方欢迎语准确。已登录后画布属于
+  // Workspace Scene 并落库，继续展示该文案会误导用户，也会遮住空白编辑面。
+  if (user) {
+    return null;
+  }
+
   return (
     <WelcomeScreen>
       <WelcomeScreen.Hints.MenuHint>
@@ -32,16 +38,14 @@ export const AppWelcomeScreen: React.FC<{
               onSelect={() => props.onCollabDialogOpen()}
             />
           )}
-          {!user && (
-            <WelcomeScreen.Center.MenuItem
-              onSelect={() => {
-                window.location.href = "/auth/login";
-              }}
-              icon={GithubIcon}
-            >
-              Login
-            </WelcomeScreen.Center.MenuItem>
-          )}
+          <WelcomeScreen.Center.MenuItem
+            onSelect={() => {
+              window.location.href = "/auth/login";
+            }}
+            icon={GithubIcon}
+          >
+            Login
+          </WelcomeScreen.Center.MenuItem>
         </WelcomeScreen.Center.Menu>
       </WelcomeScreen.Center>
     </WelcomeScreen>

@@ -20,7 +20,6 @@ import Trans from "@excalidraw/excalidraw/components/Trans";
 import {
   APP_NAME,
   EVENT,
-  THEME,
   TITLE_TIMEOUT,
   VERSION_TIMEOUT,
   debounce,
@@ -64,8 +63,6 @@ import {
 
 import { actionSaveToActiveFile } from "@excalidraw/excalidraw/actions";
 
-import { LoadIcon } from "@excalidraw/excalidraw/components/icons";
-
 import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
 import type { RestoredDataState } from "@excalidraw/excalidraw/data/restore";
 import type {
@@ -96,7 +93,6 @@ import {
   appJotaiStore,
   storageConfigAtom,
   currentCanvasIdAtom,
-  createCanvasDialogAtom,
   renameCanvasDialogAtom,
   saveAsDialogAtom,
 } from "./app-jotai";
@@ -126,19 +122,23 @@ import { useSceneEditLock } from "./hooks/useSceneEditLock";
 import { useAiCanvasSync } from "./hooks/useAiCanvasSync";
 import { useMagicSettings } from "./hooks/useMagicSettings";
 import { useShellRouteSync } from "./hooks/useShellRouteSync";
+import { useRouteSceneLoader } from "./hooks/useRouteSceneLoader";
 import {
   exportToBackend,
   getCollaborationLinkData,
   isCollaborationLink,
   loadScene,
 } from "./data";
+import {
+  dehydrateCanvasData,
+  type CanvasData,
+  type IStorageAdapter,
+} from "./data/storage";
 
-import { CreateCanvasDialog } from "./components/CreateCanvasDialog";
 import { MagicSettings } from "./components/MagicSettings";
 import { RenameCanvasDialog } from "./components/RenameCanvasDialog";
 import { SaveAsDialog } from "./components/SaveAsDialog";
 
-import StorageSettingsDialog from "./components/StorageSettingsDialog";
 import { updateStaleImageStatuses } from "./data/FileManager";
 import {
   importFromLocalStorage,
@@ -176,10 +176,6 @@ import {
   isIndexedDbCanvasId,
 } from "./data/canvasId";
 
-import { CloudflareKVAdapter } from "./data/storageAdapters/CloudflareKVAdapter";
-
-import { S3StorageAdapter } from "./data/storageAdapters/S3StorageAdapter";
-
 import {
   WorkspaceSidebar,
   WorkspaceSidebarTrigger,
@@ -214,9 +210,22 @@ import {
   deleteWorkspace as deleteWorkspaceApi,
   listWorkspaces,
   type Workspace,
+  type WorkspaceScene,
 } from "./auth/workspaceApi";
 import { queryClient, queryKeys } from "./lib/queryClient";
-import { buildSceneUrl } from "./router";
+import { sceneClientHeaders } from "./auth/sceneClient";
+import {
+  buildSceneUrl,
+  navigateTo,
+  parseUrl,
+  replaceUrl,
+  replaceWorkspaceSlugInUrl,
+} from "./router";
+import {
+  canCommitWorkspaceRouteMutation,
+  canCommitWorkspaceMutation,
+  getWorkspaceDeleteRedirect,
+} from "./components/Workspace/workspaceMutationRouting";
 import {
   drawingDefaultsToAppState,
   loadDrawingDefaults,
@@ -227,8 +236,6 @@ import { PresentationMode } from "./components/Presentation/PresentationMode";
 import { PresentationTalktrackMount } from "./components/Talktrack/PresentationTalktrackMount";
 
 import type { CollabAPI } from "./collab/Collab";
-
-import type { CanvasData, IStorageAdapter } from "./data/storage";
 
 polyfill();
 
@@ -251,13 +258,17 @@ declare global {
 
 let pwaEvent: BeforeInstallPromptEvent | null = null;
 
+const invalidateSceneMutationCaches = () =>
+  Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.collections.all }),
+  ]);
+
 const migrateIndexedDbCanvasToSqlite = async ({
   canvasData,
-  storageAdapter,
   collectionId,
 }: {
   canvasData: CanvasData;
-  storageAdapter: IStorageAdapter;
   collectionId?: string | null;
 }): Promise<string | null> => {
   const elements = canvasData.elements ?? [];
@@ -269,10 +280,12 @@ const migrateIndexedDbCanvasToSqlite = async ({
   const scene = await createScene({
     title,
     collectionId: collectionId || undefined,
-  });
-  await storageAdapter.saveCanvas(scene.id, {
-    ...canvasData,
-    appState: { ...canvasData.appState, name: title },
+    data: JSON.stringify(
+      dehydrateCanvasData({
+        ...canvasData,
+        appState: { ...canvasData.appState, name: title },
+      }),
+    ),
   });
   return scene.id;
 };
@@ -453,7 +466,6 @@ const initializeScene = async (opts: {
 
 const ExcalidrawWrapper = () => {
   const [errorMessage, setErrorMessage] = useState("");
-  const [isStorageSettingsOpen, setIsStorageSettingsOpen] = useState(false);
   const isCollabDisabled = isRunningInIframe();
 
   const setUser = useSetAtom(userAtom);
@@ -463,14 +475,13 @@ const ExcalidrawWrapper = () => {
   const storageConfig = useAtomValue(storageConfigAtom);
   const setStorageConfig = useSetAtom(storageConfigAtom);
   const [currentCanvasId, setCurrentCanvasId] = useAtom(currentCanvasIdAtom);
-  const [createCanvasDialogState] = useAtom(createCanvasDialogAtom);
   const [renameCanvasDialogState] = useAtom(renameCanvasDialogAtom);
   const [saveAsDialogState] = useAtom(saveAsDialogAtom);
 
   const [saveStatus, setSaveStatus] = useState<
     "saved" | "saving" | "unsaved" | "login-required"
   >("saved");
-  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
+  const [, setLastSaveTime] = useState<Date | null>(null);
 
   const resetSaveStatus = useCallback(() => {
     setSaveStatus("saved");
@@ -478,37 +489,13 @@ const ExcalidrawWrapper = () => {
   }, []);
 
   const storageAdapter: IStorageAdapter = useMemo(() => {
-    // 已登录用户默认走后端 SQLite。新注册用户 localStorage 里仍是 indexed-db，
-    // 若继续用 IndexedDB，Create Scene 会在 API 已写入 canvases 后因缺 metadata 失败。
-    if (user && storageConfig.type !== "kv" && storageConfig.type !== "s3") {
+    // 认证是持久化边界：登录后只走本实例 SQLite，未登录只使用浏览器
+    // IndexedDB。不能让旧的 KV/S3 偏好绕过 Workspace Scene 的身份模型。
+    if (user) {
       return new BackendStorageAdapter();
     }
-    if (
-      storageConfig.type === "kv" &&
-      storageConfig.kvUrl &&
-      storageConfig.kvApiToken
-    ) {
-      return new CloudflareKVAdapter({
-        kv_url: storageConfig.kvUrl,
-        apiToken: storageConfig.kvApiToken,
-      });
-    }
-    if (
-      storageConfig.type === "s3" &&
-      storageConfig.s3AccessKeyId &&
-      storageConfig.s3SecretAccessKey &&
-      storageConfig.s3Region &&
-      storageConfig.s3BucketName
-    ) {
-      return new S3StorageAdapter({
-        accessKeyId: storageConfig.s3AccessKeyId,
-        secretAccessKey: storageConfig.s3SecretAccessKey,
-        region: storageConfig.s3Region,
-        bucketName: storageConfig.s3BucketName,
-      });
-    }
     return new IndexedDBStorageAdapter();
-  }, [storageConfig, user]);
+  }, [user]);
 
   const { editorTheme, appTheme, setAppTheme } = useHandleAppTheme();
 
@@ -525,9 +512,7 @@ const ExcalidrawWrapper = () => {
         return;
       }
       excalidrawAPI.updateScene({
-        appState: drawingDefaultsToAppState(
-          defaults ?? loadDrawingDefaults(),
-        ),
+        appState: drawingDefaultsToAppState(defaults ?? loadDrawingDefaults()),
         captureUpdate: CaptureUpdateAction.NEVER,
       });
     },
@@ -544,10 +529,12 @@ const ExcalidrawWrapper = () => {
   const magicSettings = useMagicSettings(excalidrawAPI);
 
   const {
+    handleSceneDeleted,
     handleCanvasSelect,
-    handleCanvasCreate,
+    handleCanvasLeave,
     handleCanvasRename,
     handleCanvasSaveAs,
+    isCanvasLoaded,
     refreshCanvases,
   } = useCanvasManagement({
     storageAdapter,
@@ -572,7 +559,6 @@ const ExcalidrawWrapper = () => {
   const currentSceneCanEdit = useAtomValue(currentSceneCanEditAtom);
   const setCurrentSceneCanEdit = useSetAtom(currentSceneCanEditAtom);
   const sceneCollabEnabled = useAtomValue(sceneCollabEnabledAtom);
-  const setSceneCollabEnabled = useSetAtom(sceneCollabEnabledAtom);
   const sceneEditLock = useAtomValue(sceneEditLockAtom);
   const setActiveCollectionId = useSetAtom(activeCollectionIdAtom);
   const [isAutoCollabScene, setIsAutoCollabScene] = useAtom(
@@ -582,10 +568,23 @@ const ExcalidrawWrapper = () => {
   const [privateCollectionId, setPrivateCollectionId] = useState<string | null>(
     null,
   );
-  const { inviteCode, clearInvite } = useShellRouteSync();
+  const { inviteCode, clearInvite } = useShellRouteSync({
+    beforeLeaveScene: handleCanvasLeave,
+  });
+
+  useRouteSceneLoader({
+    ready: Boolean(excalidrawAPI),
+    currentSceneId,
+    currentCanvasId,
+    currentWorkspaceSlug,
+    isCanvasLoaded,
+    handleCanvasSelect,
+  });
 
   useSceneEditLock({
-    sceneId: currentSceneId,
+    // 路由可先指向目标 Scene；独占锁必须继续跟随编辑器中实际已加载的画布，
+    // 直到切换链路保存旧内容并把 currentCanvasId 更新为目标 Scene。
+    sceneId: currentCanvasId,
     canEdit: currentSceneCanEdit,
     excalidrawAPI,
   });
@@ -597,9 +596,19 @@ const ExcalidrawWrapper = () => {
     if (sceneEditLock?.locked) {
       return;
     }
-    const { storageAdapter, currentCanvasId, refreshCanvases } =
-      onChangeRef.current;
-    if (currentCanvasId && isBackendPersistableCanvasId(currentCanvasId)) {
+    const {
+      storageAdapter,
+      currentCanvasId,
+      currentSceneCanEdit,
+      currentSceneId,
+      refreshCanvases,
+    } = onChangeRef.current;
+    if (
+      currentCanvasId &&
+      isBackendPersistableCanvasId(currentCanvasId) &&
+      currentSceneId === currentCanvasId &&
+      currentSceneCanEdit === true
+    ) {
       setSaveStatus("saving");
       try {
         await storageAdapter.saveCanvas(currentCanvasId, {
@@ -607,10 +616,17 @@ const ExcalidrawWrapper = () => {
           appState: excalidrawAPI.getAppState(),
           files: excalidrawAPI.getFiles(),
         });
+        if (currentCanvasId !== onChangeRef.current.currentCanvasId) {
+          return;
+        }
         setSaveStatus("saved");
         setLastSaveTime(new Date());
+        await invalidateSceneMutationCaches();
         await refreshCanvases();
       } catch (e: any) {
+        if (currentCanvasId !== onChangeRef.current.currentCanvasId) {
+          return;
+        }
         if (e instanceof AuthError) {
           setSaveStatus("login-required");
         } else {
@@ -812,7 +828,6 @@ const ExcalidrawWrapper = () => {
               if (user && isIndexedDbCanvasId(currentCanvasId)) {
                 const migratedId = await migrateIndexedDbCanvasToSqlite({
                   canvasData,
-                  storageAdapter,
                   collectionId: privateCollectionId,
                 });
                 if (migratedId) {
@@ -842,8 +857,11 @@ const ExcalidrawWrapper = () => {
               setCurrentCanvasId(null);
               data = null;
             } else {
+              // 登出后 localStorage 可能还保留 Workspace Scene ID。该 ID
+              // 不应继续访问 SQLite，也不能让初始场景 promise 悬置；清掉后
+              // 正常初始化未登录的本地空白画布。
               setCurrentCanvasId(null);
-              return;
+              data = null;
             }
           } catch (e) {
             console.error("Failed to load canvas data.", e);
@@ -870,34 +888,35 @@ const ExcalidrawWrapper = () => {
           loadImages(data, true);
           initialStatePromiseRef.current.promise.resolve(data.scene);
         } else {
-          initializeScene({ collabAPI, excalidrawAPI }).then(async (initData) => {
-            loadImages(initData, true);
-            initialStatePromiseRef.current.promise.resolve(initData.scene);
-            const localElements = initData.scene?.elements;
-            if (user && localElements && localElements.length > 0) {
-              try {
-                const migratedId = await migrateIndexedDbCanvasToSqlite({
-                  canvasData: {
-                    elements: localElements as CanvasData["elements"],
-                    appState: (initData.scene?.appState ||
-                      excalidrawAPI.getAppState()) as CanvasData["appState"],
-                    files: {},
-                  },
-                  storageAdapter,
-                  collectionId: privateCollectionId,
-                });
-                if (migratedId) {
-                  setCurrentCanvasId(migratedId);
-                  appJotaiStore.set(currentSceneIdAtom, migratedId);
+          initializeScene({ collabAPI, excalidrawAPI }).then(
+            async (initData) => {
+              loadImages(initData, true);
+              initialStatePromiseRef.current.promise.resolve(initData.scene);
+              const localElements = initData.scene?.elements;
+              if (user && localElements && localElements.length > 0) {
+                try {
+                  const migratedId = await migrateIndexedDbCanvasToSqlite({
+                    canvasData: {
+                      elements: localElements as CanvasData["elements"],
+                      appState: (initData.scene?.appState ||
+                        excalidrawAPI.getAppState()) as CanvasData["appState"],
+                      files: {},
+                    },
+                    collectionId: privateCollectionId,
+                  });
+                  if (migratedId) {
+                    setCurrentCanvasId(migratedId);
+                    appJotaiStore.set(currentSceneIdAtom, migratedId);
+                  }
+                } catch (error) {
+                  console.error(
+                    "Failed to migrate localStorage canvas to sqlite:",
+                    error,
+                  );
                 }
-              } catch (error) {
-                console.error(
-                  "Failed to migrate localStorage canvas to sqlite:",
-                  error,
-                );
               }
-            }
-          });
+            },
+          );
         }
       }
     };
@@ -1098,12 +1117,16 @@ const ExcalidrawWrapper = () => {
   const onChangeRef = useRef({
     storageAdapter,
     currentCanvasId,
+    currentSceneCanEdit,
+    currentSceneId,
     refreshCanvases,
     collabAPI,
   });
   onChangeRef.current = {
     storageAdapter,
     currentCanvasId,
+    currentSceneCanEdit,
+    currentSceneId,
     refreshCanvases,
     collabAPI,
   };
@@ -1116,24 +1139,34 @@ const ExcalidrawWrapper = () => {
 
   const persistCanvas = useCallback(
     async (
+      canvasId: string,
       elements: readonly NonDeletedExcalidrawElement[],
       appState: AppState,
       files: BinaryFiles,
     ) => {
-      const { storageAdapter, currentCanvasId, collabAPI } =
-        onChangeRef.current;
-      if (!currentCanvasId || !isBackendPersistableCanvasId(currentCanvasId)) {
+      const {
+        storageAdapter,
+        currentCanvasId,
+        currentSceneCanEdit,
+        currentSceneId,
+        collabAPI,
+      } = onChangeRef.current;
+      // 防抖回调属于触发它的画布。切走后绝不能把旧 Scene 的快照写进新 Scene。
+      if (
+        canvasId !== currentCanvasId ||
+        !isBackendPersistableCanvasId(canvasId)
+      ) {
         return;
       }
-      if (
-        collabAPI?.isCollaborating() &&
-        !collabAPI.shouldPersistCanvas()
-      ) {
+      if (currentSceneId !== canvasId || currentSceneCanEdit !== true) {
+        return;
+      }
+      if (collabAPI?.isCollaborating() && !collabAPI.shouldPersistCanvas()) {
         return;
       }
       setSaveStatus("saving");
       try {
-        await storageAdapter.saveCanvas(currentCanvasId, {
+        await storageAdapter.saveCanvas(canvasId, {
           elements,
           appState,
           files,
@@ -1143,17 +1176,19 @@ const ExcalidrawWrapper = () => {
         // The canvasId query param is REQUIRED — the server rejects syncs
         // without it, so an open canvas can never overwrite a different
         // canvas that the AI is currently working on.
-        if (currentCanvasId.startsWith("ai-")) {
+        if (canvasId.startsWith("ai-")) {
           const payload = {
             elements: elements.map((el) => ({ ...el })),
           };
           const response = await fetch(
-            `/api/elements/sync?canvasId=${encodeURIComponent(
-              currentCanvasId,
-            )}`,
+            `/api/elements/sync?canvasId=${encodeURIComponent(canvasId)}`,
             {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+                ...sceneClientHeaders(),
+              },
               body: JSON.stringify(payload),
             },
           );
@@ -1164,12 +1199,20 @@ const ExcalidrawWrapper = () => {
             );
           }
         }
+        // 保存请求可能在切换完成后才返回；不能用旧画布的结果更新新画布 UI。
+        if (canvasId !== onChangeRef.current.currentCanvasId) {
+          return;
+        }
         setSaveStatus("saved");
         setLastSaveTime(new Date());
+        await invalidateSceneMutationCaches();
         if (!collabAPI?.isCollaborating()) {
           await onChangeRef.current.refreshCanvases();
         }
       } catch (e: any) {
+        if (canvasId !== onChangeRef.current.currentCanvasId) {
+          return;
+        }
         if (e instanceof AuthError) {
           setSaveStatus("login-required");
         } else {
@@ -1195,8 +1238,26 @@ const ExcalidrawWrapper = () => {
     appState: AppState,
     files: BinaryFiles,
   ) => {
+    const {
+      currentCanvasId: activeCanvasId,
+      currentSceneCanEdit: canEditActiveScene,
+      currentSceneId: activeSceneId,
+    } = onChangeRef.current;
+    // 临时 #room 协作不属于 Workspace Scene。即使浏览器里残留了一个
+    // Workspace currentCanvasId，场景增量也必须先广播；下面的 ACL/路由守卫
+    // 只负责阻止 SQLite 持久化，不能截断端到端加密的房间同步。
     if (collabAPI?.isCollaborating()) {
       collabAPI.syncElements(elements);
+    }
+
+    if (
+      isBackendPersistableCanvasId(activeCanvasId) &&
+      (activeSceneId !== activeCanvasId || canEditActiveScene !== true)
+    ) {
+      previousElementsRef.current = elements;
+      previousSceneVersionRef.current = getSceneVersion(elements);
+      previousFilesRef.current = files;
+      return;
     }
 
     const sceneVersion = getSceneVersion(elements);
@@ -1218,6 +1279,7 @@ const ExcalidrawWrapper = () => {
         ? collabDebouncedSave
         : debouncedSave;
       save(
+        currentCanvasId,
         elements as readonly NonDeletedExcalidrawElement[],
         appState,
         files,
@@ -1340,48 +1402,90 @@ const ExcalidrawWrapper = () => {
   // scene id 与 canvas id 同源，因此新建场景后先写一份空白画布，
   // 之后所有读写都复用既有的 storageAdapter 路径（含 AI 同步、协作）。
   const handleNewScene = useCallback(
-    async (collectionId?: string) => {
-      if (!excalidrawAPI) {
-        return;
-      }
+    async (
+      collectionId?: string,
+      options?: { skipCurrentSceneSave?: boolean },
+    ) => {
+      const urlAtStart = window.location.href;
+      const workspaceAtStart = currentWorkspace;
       try {
+        // 创建 API 和缓存刷新发生在路由切换之前。先显式保存源 Scene，避免
+        // 创建请求期间的最后一段防抖修改尚未落盘。
+        if (
+          !options?.skipCurrentSceneSave &&
+          excalidrawAPI &&
+          currentCanvasId &&
+          currentCanvasId === currentSceneId &&
+          currentSceneCanEdit === true &&
+          !sceneEditLock?.locked &&
+          isBackendPersistableCanvasId(currentCanvasId)
+        ) {
+          await storageAdapter.saveCanvas(currentCanvasId, {
+            elements: excalidrawAPI.getSceneElements(),
+            appState: excalidrawAPI.getAppState(),
+            files: excalidrawAPI.getFiles(),
+          });
+        }
+
+        if (
+          !canCommitWorkspaceRouteMutation({
+            workspaceIdAtStart: workspaceAtStart?.id ?? null,
+            currentWorkspaceId:
+              appJotaiStore.get(currentWorkspaceAtom)?.id ?? null,
+            urlAtStart,
+            currentUrl: window.location.href,
+          })
+        ) {
+          return;
+        }
+
         const title = `Untitled ${new Date().toLocaleTimeString()}`;
         const targetCollectionId =
           collectionId || privateCollectionId || undefined;
+        const slug = workspaceAtStart?.slug || currentWorkspaceSlug;
+
+        if (!workspaceAtStart?.id || !slug) {
+          throw new Error("Workspace is not ready.");
+        }
 
         const scene = await createScene({
           title,
           collectionId: targetCollectionId,
         });
 
-        excalidrawAPI.resetScene();
-        await storageAdapter.saveCanvas(scene.id, {
-          elements: [],
-          appState: { ...excalidrawAPI.getAppState(), name: title },
-          files: {},
-        });
+        // Workspace Sidebar 读取 React Query scene cache，而不是旧的
+        // useCanvasManagement 列表。先写入目标 Collection 的 cache，列表会立即
+        // 出现新场景；随后失效查询，以服务端结果校正缩略图和时间戳。
+        const queryKey = queryKeys.scenes.list(
+          workspaceAtStart.id,
+          targetCollectionId ?? null,
+        );
+        queryClient.setQueryData<WorkspaceScene[]>(queryKey, (previous) => [
+          scene,
+          ...(previous ?? []).filter(({ id }) => id !== scene.id),
+        ]);
+        await invalidateSceneMutationCaches();
 
-        setCurrentCanvasId(scene.id);
-        setCurrentSceneId(scene.id);
-        setCurrentSceneTitle(title);
-        setCurrentSceneCanEdit(true);
-        setSceneCollabEnabled(false);
+        if (
+          !canCommitWorkspaceRouteMutation({
+            workspaceIdAtStart: workspaceAtStart.id,
+            currentWorkspaceId:
+              appJotaiStore.get(currentWorkspaceAtom)?.id ?? null,
+            urlAtStart,
+            currentUrl: window.location.href,
+          })
+        ) {
+          return;
+        }
+
         if (targetCollectionId) {
           setActiveCollectionId(targetCollectionId);
         }
         openWorkspaceSidebar();
-        setAppMode("canvas");
         resetSaveStatus();
-        await refreshCanvases();
-
-        const slug = currentWorkspace?.slug || currentWorkspaceSlug;
-        if (slug) {
-          window.history.pushState(
-            { sceneId: scene.id },
-            "",
-            buildSceneUrl(slug, scene.id),
-          );
-        }
+        // 只能经 navigateTo() 变更 URL。它会派发 popstate，让路由同步、
+        // 权限检查和 handleCanvasSelect 按统一场景切换事务执行。
+        navigateTo(buildSceneUrl(slug, scene.id), { sceneId: scene.id });
       } catch (error) {
         console.error("Failed to create new scene:", error);
         setErrorMessage(
@@ -1395,18 +1499,15 @@ const ExcalidrawWrapper = () => {
       excalidrawAPI,
       storageAdapter,
       privateCollectionId,
-      currentWorkspace?.slug,
+      currentWorkspace,
       currentWorkspaceSlug,
-      setCurrentCanvasId,
-      setCurrentSceneId,
-      setCurrentSceneTitle,
-      setCurrentSceneCanEdit,
-      setSceneCollabEnabled,
+      currentCanvasId,
+      currentSceneId,
+      currentSceneCanEdit,
+      sceneEditLock?.locked,
       setActiveCollectionId,
       openWorkspaceSidebar,
-      setAppMode,
       resetSaveStatus,
-      refreshCanvases,
     ],
   );
 
@@ -1418,18 +1519,13 @@ const ExcalidrawWrapper = () => {
       }
       return;
     }
-    if (storageConfig.type !== "kv" && storageConfig.type !== "s3") {
-      if (storageConfig.type !== "default") {
-        setStorageConfig({ ...storageConfig, type: "default" });
-      }
+    if (storageConfig.type !== "default") {
+      setStorageConfig({ type: "default" });
     }
   }, [user, authLoading, storageConfig, setStorageConfig]);
 
   useEffect(() => {
     if (!user || authLoading || !excalidrawAPI) {
-      return;
-    }
-    if (storageConfig.type === "kv" || storageConfig.type === "s3") {
       return;
     }
     if (migratedLoginRef.current === user.id) {
@@ -1441,6 +1537,8 @@ const ExcalidrawWrapper = () => {
     }
 
     const run = async () => {
+      const migrationCanvasId = currentCanvasId;
+      const migrationUrl = window.location.href;
       if (currentSceneId && !isIndexedDbCanvasId(currentSceneId)) {
         if (isIndexedDbCanvasId(currentCanvasId)) {
           setCurrentCanvasId(null);
@@ -1469,7 +1567,6 @@ const ExcalidrawWrapper = () => {
             appState: excalidrawAPI.getAppState(),
             files: excalidrawAPI.getFiles(),
           },
-          storageAdapter,
           collectionId: privateCollectionId,
         });
         migratedLoginRef.current = user.id;
@@ -1479,22 +1576,28 @@ const ExcalidrawWrapper = () => {
           }
           return;
         }
+        if (
+          appJotaiStore.get(currentCanvasIdAtom) !== migrationCanvasId ||
+          window.location.href !== migrationUrl
+        ) {
+          // 迁移结果已经安全写入后端，但用户已切换画布或路由；只刷新列表，
+          // 不能让旧异步响应覆盖当前 URL/Scene 身份。
+          await invalidateSceneMutationCaches();
+          await refreshCanvases();
+          return;
+        }
         setCurrentCanvasId(migratedId);
         setCurrentSceneId(migratedId);
         setCurrentSceneTitle(excalidrawAPI.getAppState().name || "Untitled");
         setAppMode("canvas");
         const slug = currentWorkspace?.slug || currentWorkspaceSlug;
         if (slug) {
-          window.history.pushState(
-            { sceneId: migratedId },
-            "",
-            buildSceneUrl(slug, migratedId),
-          );
+          navigateTo(buildSceneUrl(slug, migratedId), { sceneId: migratedId });
         }
         await refreshCanvases();
       } catch (error) {
         console.error("Failed to migrate local canvas to sqlite:", error);
-        migratedLoginRef.current = user.id;
+        // IndexedDB 原件仍在，不能把失败标记为已迁移；后续依赖变化或重载时重试。
       }
     };
 
@@ -1517,21 +1620,6 @@ const ExcalidrawWrapper = () => {
     refreshCanvases,
   ]);
 
-  // 侧栏选中场景后，走既有画布加载路径把内容拉进编辑器。
-  const handleCanvasSelectRef = useRef(handleCanvasSelect);
-  handleCanvasSelectRef.current = handleCanvasSelect;
-
-  useEffect(() => {
-    if (
-      !excalidrawAPI ||
-      !currentSceneId ||
-      currentSceneId === currentCanvasId
-    ) {
-      return;
-    }
-    handleCanvasSelectRef.current(currentSceneId);
-  }, [excalidrawAPI, currentSceneId, currentCanvasId]);
-
   // 仅当该 Scene 已主动「允许一起编辑」时才进 WS 房间。
   useEffect(() => {
     if (
@@ -1553,10 +1641,7 @@ const ExcalidrawWrapper = () => {
     }
 
     const sceneId = currentCanvasId;
-    if (
-      collabAPI.isCollaborating() &&
-      collabAPI.getRoomId() === sceneId
-    ) {
+    if (collabAPI.isCollaborating() && collabAPI.getRoomId() === sceneId) {
       setIsAutoCollabScene(true);
       return;
     }
@@ -1642,11 +1727,34 @@ const ExcalidrawWrapper = () => {
       if (!currentWorkspace) {
         throw new Error("No workspace selected");
       }
-      const updated = await updateWorkspaceApi(currentWorkspace.id, data);
-      setCurrentWorkspace(updated as WorkspaceData);
-      if (updated.slug !== currentWorkspace.slug) {
-        setCurrentWorkspaceSlug(updated.slug);
+      const workspaceAtStart = currentWorkspace;
+      const updated = await updateWorkspaceApi(workspaceAtStart.id, data);
+      if (
+        canCommitWorkspaceMutation({
+          mutationWorkspaceId: workspaceAtStart.id,
+          mutationWorkspaceSlug: workspaceAtStart.slug,
+          currentWorkspaceId:
+            appJotaiStore.get(currentWorkspaceAtom)?.id ?? null,
+          currentRoute: parseUrl(),
+        })
+      ) {
+        setCurrentWorkspace(updated as WorkspaceData);
+        if (updated.slug !== workspaceAtStart.slug) {
+          setCurrentWorkspaceSlug(updated.slug);
+          const nextUrl = replaceWorkspaceSlugInUrl(
+            window.location.href,
+            workspaceAtStart.slug,
+            updated.slug,
+          );
+          if (nextUrl) {
+            replaceUrl(nextUrl);
+          }
+        }
       }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.all }),
+        invalidateSceneMutationCaches(),
+      ]);
     },
     [currentWorkspace, setCurrentWorkspace, setCurrentWorkspaceSlug],
   );
@@ -1656,39 +1764,97 @@ const ExcalidrawWrapper = () => {
       if (!currentWorkspace) {
         throw new Error("No workspace selected");
       }
-      const updated = await uploadWorkspaceAvatar(currentWorkspace.id, file);
-      setCurrentWorkspace(updated as WorkspaceData);
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.workspaces.all,
-      });
+      const workspaceAtStart = currentWorkspace;
+      const updated = await uploadWorkspaceAvatar(workspaceAtStart.id, file);
+      if (
+        canCommitWorkspaceMutation({
+          mutationWorkspaceId: workspaceAtStart.id,
+          mutationWorkspaceSlug: workspaceAtStart.slug,
+          currentWorkspaceId:
+            appJotaiStore.get(currentWorkspaceAtom)?.id ?? null,
+          currentRoute: parseUrl(),
+        })
+      ) {
+        setCurrentWorkspace(updated as WorkspaceData);
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.all }),
+        invalidateSceneMutationCaches(),
+      ]);
     },
     [currentWorkspace, setCurrentWorkspace],
   );
+
+  const handleBeforeCollectionMutation = useCallback(async () => {
+    if (
+      !excalidrawAPI ||
+      !currentCanvasId ||
+      currentCanvasId !== currentSceneId ||
+      currentSceneCanEdit !== true ||
+      sceneEditLock?.locked ||
+      !isBackendPersistableCanvasId(currentCanvasId)
+    ) {
+      return;
+    }
+    if (collabAPI?.isCollaborating() && !collabAPI.shouldPersistCanvas()) {
+      throw new Error(
+        "当前协作客户端不是持久化主节点，请先结束协作或等待主节点保存。",
+      );
+    }
+    await storageAdapter.saveCanvas(currentCanvasId, {
+      elements: excalidrawAPI.getSceneElements(),
+      appState: excalidrawAPI.getAppState(),
+      files: excalidrawAPI.getFiles(),
+    });
+  }, [
+    collabAPI,
+    currentCanvasId,
+    currentSceneCanEdit,
+    currentSceneId,
+    excalidrawAPI,
+    sceneEditLock?.locked,
+    storageAdapter,
+  ]);
 
   const handleDeleteWorkspace = useCallback(async () => {
     if (!currentWorkspace) {
       throw new Error("No workspace selected");
     }
-    await deleteWorkspaceApi(currentWorkspace.id);
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.workspaces.all,
-    });
-
+    const workspaceAtStart = currentWorkspace;
+    await deleteWorkspaceApi(workspaceAtStart.id);
     const remaining = await listWorkspaces();
-    if (remaining.length > 0) {
-      setCurrentWorkspace(remaining[0] as WorkspaceData);
-      setCurrentWorkspaceSlug(remaining[0].slug);
-      navigateToDashboard();
-    } else {
-      setCurrentWorkspace(null);
-      setCurrentWorkspaceSlug(null);
+    const currentWorkspaceAfterDelete = appJotaiStore.get(currentWorkspaceAtom);
+    const currentRoute = parseUrl();
+    const selectedFallback = remaining.find(
+      (workspace) => workspace.id === currentWorkspaceAfterDelete?.id,
+    );
+    const fallbackWorkspace = selectedFallback ?? remaining[0] ?? null;
+
+    if (
+      canCommitWorkspaceMutation({
+        mutationWorkspaceId: workspaceAtStart.id,
+        mutationWorkspaceSlug: workspaceAtStart.slug,
+        currentWorkspaceId: currentWorkspaceAfterDelete?.id ?? null,
+        currentRoute,
+      })
+    ) {
+      setCurrentWorkspace((fallbackWorkspace as WorkspaceData | null) ?? null);
+      setCurrentWorkspaceSlug(fallbackWorkspace?.slug ?? null);
     }
-  }, [
-    currentWorkspace,
-    setCurrentWorkspace,
-    setCurrentWorkspaceSlug,
-    navigateToDashboard,
-  ]);
+
+    const redirect = getWorkspaceDeleteRedirect({
+      deletedWorkspaceSlug: workspaceAtStart.slug,
+      currentRoute,
+      fallbackWorkspaceSlug: fallbackWorkspace?.slug ?? null,
+    });
+    if (redirect) {
+      navigateTo(redirect);
+    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.all }),
+      invalidateSceneMutationCaches(),
+    ]);
+  }, [currentWorkspace, setCurrentWorkspace, setCurrentWorkspaceSlug]);
 
   // browsers generally prevent infinite self-embedding, there are
   // cases where it still happens, and while we disallow self-embedding
@@ -1780,6 +1946,8 @@ const ExcalidrawWrapper = () => {
           子元素，margin-left 负值滑出，非 fixed 定位） */}
       <WorkspaceSidebar
         onNewScene={handleNewScene}
+        onCurrentSceneDeleted={handleSceneDeleted}
+        onBeforeCollectionMutation={handleBeforeCollectionMutation}
         currentSceneId={currentSceneId}
         workspace={currentWorkspace}
         onWorkspaceChange={(workspace, privateId) => {
@@ -1825,7 +1993,8 @@ const ExcalidrawWrapper = () => {
           initialData={initialStatePromiseRef.current.promise}
           isCollaborating={isCollaborating}
           viewModeEnabled={
-            (!!currentSceneId && currentSceneCanEdit === false) ||
+            // 当前 URL 是 Scene 时，权限未确认也必须先只读。
+            (!!currentSceneId && currentSceneCanEdit !== true) ||
             sceneEditLock?.locked === true
           }
           onPointerUpdate={collabAPI?.onPointerUpdate}
@@ -1879,6 +2048,7 @@ const ExcalidrawWrapper = () => {
 
             return (
               <div style={{ display: "flex", alignItems: "center" }}>
+                <WorkspaceSidebarTrigger />
                 {statusMessage && (
                   <div
                     style={{
@@ -1927,15 +2097,18 @@ const ExcalidrawWrapper = () => {
               这里的 DefaultSidebar 是 host 实例，会顶掉 LayerUI 的 fallback。
               不要再额外挂一份 DefaultSidebar __fallback，否则会同时存在两个
               Island，点侧栏会被另一份的 useOutsideClick 当成外部点击而关闭。 */}
-          <CommentsMount excalidrawAPI={excalidrawAPI} />
-
-          {/* 演示 + 录制：DefaultSidebar 的 presentation/recording tab。
-              与 CommentsMount 的 DefaultSidebar 并列，各自贡献 TabTrigger + Tab。 */}
-          <PresentationTalktrackMount excalidrawAPI={excalidrawAPI} />
+          <PresentationTalktrackMount
+            excalidrawAPI={excalidrawAPI}
+            renderSidebar={(tabs) => (
+              <CommentsMount
+                excalidrawAPI={excalidrawAPI}
+                sidebarExtras={tabs}
+              />
+            )}
+          />
           <PresentationMode excalidrawAPI={excalidrawAPI} />
 
           <SceneEditLockBanner />
-          <WorkspaceSidebarTrigger />
           <AppMainMenu
             onCollabDialogOpen={onCollabDialogOpen}
             isCollaborating={isCollaborating}
@@ -1943,7 +2116,6 @@ const ExcalidrawWrapper = () => {
             theme={appTheme}
             setTheme={(theme) => setAppTheme(theme)}
             refresh={() => forceRefresh((prev) => !prev)}
-            onStorageSettingsClick={() => setIsStorageSettingsOpen(true)}
           />
           <AppWelcomeScreen
             onCollabDialogOpen={onCollabDialogOpen}
@@ -1992,19 +2164,10 @@ const ExcalidrawWrapper = () => {
             <Collab excalidrawAPI={excalidrawAPI} />
           )}
 
-          {isStorageSettingsOpen && (
-            <StorageSettingsDialog
-              onClose={() => setIsStorageSettingsOpen(false)}
-            />
-          )}
-
-          {createCanvasDialogState.isOpen && (
-            <CreateCanvasDialog onCanvasCreate={handleCanvasCreate} />
-          )}
           {renameCanvasDialogState.isOpen && (
             <RenameCanvasDialog onCanvasRename={handleCanvasRename} />
           )}
-          {saveAsDialogState.isOpen && (
+          {!user && saveAsDialogState.isOpen && (
             <SaveAsDialog onCanvasSaveAs={handleCanvasSaveAs} />
           )}
 

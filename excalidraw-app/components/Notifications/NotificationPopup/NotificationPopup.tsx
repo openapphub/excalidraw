@@ -21,7 +21,11 @@ interface NotificationPopupProps {
   /** Current workspace slug for building URLs */
   workspaceSlug?: string;
   /** Callback when navigating to a notification */
-  onNavigate?: (sceneId: string, threadId?: string, commentId?: string) => void;
+  onNavigate?: (
+    sceneId: string,
+    threadId?: string,
+    commentId?: string,
+  ) => void | Promise<void>;
 }
 
 /**
@@ -82,7 +86,7 @@ export const NotificationPopup: React.FC<NotificationPopupProps> = ({
     await markAsRead(notificationId);
   };
 
-  const handleItemClick = (notification: typeof notifications[0]) => {
+  const handleItemClick = async (notification: typeof notifications[0]) => {
     // Mark as read when clicking
     if (!notification.read) {
       markAsRead(notification.id);
@@ -90,7 +94,7 @@ export const NotificationPopup: React.FC<NotificationPopupProps> = ({
 
     // Navigate to scene with thread/comment focused
     if (onNavigate) {
-      onNavigate(
+      await onNavigate(
         notification.scene.id,
         notification.thread?.id,
         notification.comment?.id,

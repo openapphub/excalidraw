@@ -13,24 +13,14 @@ import {
 } from "../components/Settings/settingsState";
 import { userAtom, useAtomValue, useSetAtom } from "../app-jotai";
 import { isBackendPersistableCanvasId } from "../data/canvasId";
+import { getSceneClientId } from "../auth/sceneClient";
 
 import type { SceneEditor } from "../auth/api/types";
 
-const LOCK_CLIENT_KEY = "excalidraw-scene-lock-client-id";
 const HEARTBEAT_MS = 10_000;
 
 export function getSceneLockClientId(): string {
-  try {
-    const existing = window.sessionStorage.getItem(LOCK_CLIENT_KEY);
-    if (existing) {
-      return existing;
-    }
-    const id = crypto.randomUUID();
-    window.sessionStorage.setItem(LOCK_CLIENT_KEY, id);
-    return id;
-  } catch {
-    return crypto.randomUUID();
-  }
+  return getSceneClientId();
 }
 
 function editorFromError(error: unknown): SceneEditor | null {
@@ -62,13 +52,23 @@ export function useSceneEditLock({
   const user = useAtomValue(userAtom);
   const setLock = useSetAtom(sceneEditLockAtom);
   const heldSceneRef = useRef<string | null>(null);
+  const collabEnabledRef = useRef(collabEnabled);
+  collabEnabledRef.current = collabEnabled;
 
   useEffect(() => {
+    if (collabEnabled) {
+      // 协作模式由首个内容写请求在服务端取得主写者租约。这里不能再发送
+      // 延迟 release，否则可能清掉刚由自动保存建立的协作主节点。
+      heldSceneRef.current = null;
+      setLock(null);
+      return;
+    }
     if (
       !sceneId ||
       !isBackendPersistableCanvasId(sceneId) ||
-      canEdit === false ||
-      collabEnabled
+      // 权限元数据尚未返回时也必须保持只读。否则直达 Scene 的首帧会
+      // 抢锁，和加载链路的 fail-closed 约束相冲突。
+      canEdit !== true
     ) {
       if (heldSceneRef.current) {
         const prev = heldSceneRef.current;
@@ -83,6 +83,10 @@ export function useSceneEditLock({
     const displayName = user?.name || user?.login || "同事";
     let cancelled = false;
     let timer: number | undefined;
+
+    // 获取锁完成前保持只读，避免首个自动保存请求在服务端尚无锁时写入。
+    setLock({ locked: true, editorName: null, isOtherTab: false });
+    excalidrawAPI?.updateScene({ appState: { viewModeEnabled: true } });
 
     const applyLocked = (editor: SceneEditor | null) => {
       setLock({
@@ -148,7 +152,9 @@ export function useSceneEditLock({
       window.removeEventListener("pagehide", onUnload);
       if (heldSceneRef.current === sceneId) {
         heldSceneRef.current = null;
-        void releaseSceneLock(sceneId, clientId).catch(() => {});
+        if (!collabEnabledRef.current) {
+          void releaseSceneLock(sceneId, clientId).catch(() => {});
+        }
       }
     };
   }, [

@@ -28,12 +28,12 @@
   transition: background-color 0.15s;
 
   &:hover {
-    background: #f0efff;
+    background: var(--button-hover-bg, #f1f0ff);
   }
 }
 
 .navItemActive {
-  background: #6a65db;
+  background: var(--color-primary, #6965db);
   color: white;
 
   .navIcon {
@@ -136,12 +136,12 @@
   transition: background-color 0.15s;
 
   &:hover {
-    background: #f0efff;
+    background: var(--button-hover-bg, #f1f0ff);
   }
 }
 
 .collectionItemActive {
-  background: #6a65db;
+  background: var(--color-primary, #6965db);
 
   .collectionIcon {
     color: white;
@@ -172,7 +172,7 @@
 
 .collectionRowActive {
   .collectionItem {
-    background: #6a65db;
+    background: var(--color-primary, #6965db);
 
     .collectionIcon {
       color: white;
@@ -274,7 +274,7 @@
     transition: background-color 0.15s;
 
     &:hover {
-      background: #f0efff;
+      background: var(--button-hover-bg, #f1f0ff);
     }
   }
 }
@@ -311,16 +311,93 @@
   }
 }
 
+@media (max-width: 700px) {
+  .nav {
+    gap: 8px;
+  }
+
+  .navList {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+    gap: 4px;
+  }
+
+  .navItem {
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-height: 64px;
+    padding: 7px 4px;
+    text-align: center;
+  }
+
+  .navLabel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 24px;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.1;
+    white-space: normal;
+  }
+
+  .collections {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .collectionsHeader {
+    padding: 0;
+  }
+
+  .collectionsTitle {
+    display: none;
+  }
+
+  .addCollection {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+  }
+
+  .collectionsList {
+    min-width: 0;
+    flex: 1;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .collectionRow {
+    flex: 0 0 auto;
+  }
+
+  .collectionItem {
+    width: auto;
+    min-width: 110px;
+    padding: 8px 10px;
+  }
+}
+
 // Dark mode
 @include dark-mode {
   .navItem {
     &:hover {
-      background: #f0efff;
+      background: var(--button-hover-bg, #f1f0ff);
     }
   }
 
   .navItemActive {
-    background: #6a65db;
+    background: var(--color-primary, #6965db);
     color: white;
 
     .navIcon {
@@ -338,7 +415,7 @@
 
   .collectionItem {
     &:hover {
-      background: #f0efff;
+      background: var(--button-hover-bg, #f1f0ff);
     }
   }
 
@@ -358,12 +435,12 @@
       color: var(--text-primary-color, #e1e1e1);
 
       &:hover {
-        background: #f0efff;
+        background: var(--button-hover-bg, #f1f0ff);
       }
     }
   }
 
   .collectionMore:hover {
-    background: #f0efff;
+    background: var(--button-hover-bg, #f1f0ff);
   }
 }

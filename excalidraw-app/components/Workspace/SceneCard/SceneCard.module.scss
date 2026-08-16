@@ -33,12 +33,12 @@
 }
 
 .thumbnail {
-  width: 64px;
-  height: 48px;
+  width: 72px;
+  height: 54px;
   border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
-  background: var(--island-bg-color, #fff);
+  background: #fff;
   border: 1px solid var(--default-border-color, #e5e5e5);
   display: flex;
   align-items: center;
@@ -47,7 +47,8 @@
   img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    background: #fff;
   }
 }
 
@@ -102,9 +103,16 @@
   }
 }
 
-.private {
+.editLock {
   flex-shrink: 0;
-  color: var(--icon-fill-color, #6b6b6b);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: rgba(224, 49, 49, 0.08);
+  color: var(--color-danger, #e03131);
 
   svg {
     width: 12px;
@@ -252,8 +260,9 @@
     color: var(--text-secondary-color, #9b9b9b);
   }
 
-  .private {
-    color: var(--icon-fill-color, #9b9b9b);
+  .editLock {
+    background: rgba(255, 107, 107, 0.12);
+    color: var(--color-danger, #ff6b6b);
   }
 
   .menuTrigger {

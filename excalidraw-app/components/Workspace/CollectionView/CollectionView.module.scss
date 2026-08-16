@@ -4,15 +4,17 @@
 @use "../../../styles/mixins" as *;
 
 .view {
-  // Define --ui-font locally since collection view is outside .excalidraw container
-  --ui-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, Segoe UI,
-    Roboto, Helvetica, Arial, sans-serif;
-  font-family: var(--ui-font);
+  @include workspace-page;
+}
 
-  flex: 1;
-  padding: 32px 48px;
-  overflow-y: auto;
-  background: var(--default-bg-color, #fafafa);
+.header,
+.separator,
+.actions,
+.content {
+  width: 100%;
+  max-width: 1440px;
+  margin-right: auto;
+  margin-left: auto;
 }
 
 // Loading state
@@ -46,7 +48,7 @@
 .titleRow {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .icon {
@@ -78,8 +80,8 @@
 .title {
   flex: 1;
   margin: 0;
-  font-size: 25px;
-  font-weight: 500;
+  font-size: 24px;
+  font-weight: 600;
   color: var(--text-primary-color, #1b1b1f);
 }
 
@@ -92,7 +94,7 @@
 .separator {
   height: 1px;
   background: var(--default-border-color, #e5e5e5);
-  margin: 24px 0;
+  margin: 24px auto;
 }
 
 // Sort dropdown
@@ -101,21 +103,7 @@
 }
 
 .sortTrigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: var(--island-bg-color, #fff);
-  border: 1px solid var(--default-border-color, #e5e5e5);
-  border-radius: 8px;
-  font-size: 14px;
-  color: var(--text-primary-color, #1b1b1f);
-  cursor: pointer;
-  transition: border-color 0.15s;
-
-  &:hover {
-    border-color: var(--color-primary, #6965db);
-  }
+  @include secondary-button;
 
   svg {
     width: 16px;
@@ -165,41 +153,23 @@
 // Action buttons
 .actions {
   display: flex;
-  gap: 16px;
-  margin-bottom: 32px;
+  gap: 10px;
+  margin-bottom: 24px;
 }
 
-.actionButton {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 24px;
-  background: var(--island-bg-color, #fff);
-  border: 2px dashed var(--default-border-color, #d0d0d0);
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-primary-color, #1b1b1f);
-  cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s;
-  min-width: 200px;
+.actionButtonSecondary {
+  @include secondary-button;
+}
 
-  &:hover {
-    border-color: var(--color-primary, #6965db);
-    background: var(--color-primary-light, rgba(105, 101, 219, 0.05));
-  }
+.actionButtonPrimary {
+  @include primary-button;
+}
 
+.actionButtonSecondary,
+.actionButtonPrimary {
   svg {
-    width: 20px;
-    height: 20px;
-    color: var(--color-primary, #6965db);
-
-    &:last-child {
-      margin-left: auto;
-      width: 16px;
-      height: 16px;
-      color: var(--icon-fill-color, #9b9b9b);
-    }
+    width: 17px;
+    height: 17px;
   }
 }
 
@@ -214,7 +184,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 40px;
+  padding: 64px 24px;
   text-align: center;
 }
 
@@ -234,19 +204,7 @@
 }
 
 .emptyCta {
-  padding: 12px 32px;
-  background: none;
-  border: none;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--color-primary, #6965db);
-  cursor: pointer;
-  text-decoration: underline;
-  transition: color 0.15s;
-
-  &:hover {
-    color: var(--color-primary-darker, #5b57c5);
-  }
+  @include primary-button;
 }
 
 .emptyHint {
@@ -303,13 +261,40 @@
     background: var(--color-primary-light, rgba(165, 161, 255, 0.15));
   }
 
-  .actionButton {
+  .actionButtonSecondary {
     background: var(--island-bg-color, #232329);
     border-color: var(--default-border-color, #3d3d3d);
     color: var(--text-primary-color, #e1e1e1);
+  }
+}
 
-    &:hover {
-      background: var(--color-primary-light, rgba(165, 161, 255, 0.1));
-    }
+@media (max-width: 640px) {
+  .view {
+    padding: 24px 16px 36px;
+  }
+
+  .titleRow {
+    flex-wrap: wrap;
+  }
+
+  .sort {
+    width: 100%;
+  }
+
+  .sortTrigger {
+    width: 100%;
+  }
+
+  .sortMenu {
+    left: 0;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+
+  .actionButtonSecondary,
+  .actionButtonPrimary {
+    flex: 1 1 160px;
   }
 }

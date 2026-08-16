@@ -8,7 +8,12 @@ import React, {
 } from "react";
 import { t } from "@excalidraw/excalidraw/i18n";
 
-import { useAtom, useSetAtom, useAtomValue } from "../../../app-jotai";
+import {
+  useAtom,
+  useSetAtom,
+  useAtomValue,
+  userAtom,
+} from "../../../app-jotai";
 import {
   globalSearch,
   type GlobalSearchCollectionResult,
@@ -49,13 +54,6 @@ const closeIcon = (
   </svg>
 );
 
-const lockIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
-
 const folderIcon = (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <path
@@ -80,6 +78,7 @@ interface SearchResultItem {
 
 // Global cache for search data (user-level, not workspace-level)
 let searchDataCache: {
+  userId: string;
   data: GlobalSearchResponse;
   timestamp: number;
 } | null = null;
@@ -97,6 +96,7 @@ export const QuickSearchModal: React.FC = () => {
   const setCurrentSceneId = useSetAtom(currentSceneIdAtom);
   const setCurrentSceneTitle = useSetAtom(currentSceneTitleAtom);
   const setIsAutoCollabScene = useSetAtom(isAutoCollabSceneAtom);
+  const user = useAtomValue(userAtom);
 
   const [query, setQuery] = useState("");
   const [collections, setCollections] = useState<
@@ -105,14 +105,27 @@ export const QuickSearchModal: React.FC = () => {
   const [scenes, setScenes] = useState<GlobalSearchSceneResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [dataUserId, setDataUserId] = useState<string | null>(null);
 
   const searchInputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const requestVersionRef = useRef(0);
 
   // Load data when modal opens (with caching)
   useEffect(() => {
-    if (!isOpen) {
+    const requestVersion = ++requestVersionRef.current;
+    const userId = user?.id ?? null;
+
+    if (searchDataCache && searchDataCache.userId !== userId) {
+      searchDataCache = null;
+    }
+
+    if (!isOpen || !userId) {
+      setCollections([]);
+      setScenes([]);
+      setDataUserId(null);
+      setIsLoading(false);
       return;
     }
 
@@ -120,35 +133,55 @@ export const QuickSearchModal: React.FC = () => {
       // Check cache first
       if (
         searchDataCache &&
+        searchDataCache.userId === userId &&
         Date.now() - searchDataCache.timestamp < CACHE_TTL
       ) {
         setCollections(searchDataCache.data.collections);
         setScenes(searchDataCache.data.scenes);
+        setDataUserId(userId);
+        setIsLoading(false);
         return;
       }
 
+      setDataUserId(null);
       setIsLoading(true);
       try {
         const data = await globalSearch();
+        if (requestVersionRef.current !== requestVersion) {
+          return;
+        }
         setCollections(data.collections);
         setScenes(data.scenes);
+        setDataUserId(userId);
 
         // Update cache
         searchDataCache = {
+          userId,
           data,
           timestamp: Date.now(),
         };
       } catch (err) {
-        console.error("Failed to load search data:", err);
+        if (requestVersionRef.current === requestVersion) {
+          console.error("Failed to load search data:", err);
+        }
       } finally {
-        setIsLoading(false);
+        if (requestVersionRef.current === requestVersion) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadData();
     // Focus input when modal opens
-    setTimeout(() => inputRef.current?.focus(), 50);
-  }, [isOpen]);
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 50);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      if (requestVersionRef.current === requestVersion) {
+        requestVersionRef.current += 1;
+      }
+    };
+  }, [isOpen, user?.id]);
 
   // Reset query and selection when modal closes
   useEffect(() => {
@@ -160,7 +193,7 @@ export const QuickSearchModal: React.FC = () => {
 
   // Filter results based on query - only show results when there's a query
   const filteredCollections = useMemo(() => {
-    if (!query.trim()) {
+    if (!query.trim() || dataUserId !== user?.id) {
       return []; // Don't show anything without a query
     }
     const lowerQuery = query.toLowerCase();
@@ -169,10 +202,10 @@ export const QuickSearchModal: React.FC = () => {
         c.name.toLowerCase().includes(lowerQuery) ||
         c.workspaceName.toLowerCase().includes(lowerQuery),
     );
-  }, [collections, query]);
+  }, [collections, dataUserId, query, user?.id]);
 
   const filteredScenes = useMemo(() => {
-    if (!query.trim()) {
+    if (!query.trim() || dataUserId !== user?.id) {
       return []; // Don't show anything without a query
     }
     const lowerQuery = query.toLowerCase();
@@ -181,7 +214,7 @@ export const QuickSearchModal: React.FC = () => {
         s.title.toLowerCase().includes(lowerQuery) ||
         s.workspaceName.toLowerCase().includes(lowerQuery),
     );
-  }, [scenes, query]);
+  }, [dataUserId, query, scenes, user?.id]);
 
   // Build flat list of results for keyboard navigation
   const allResults = useMemo((): SearchResultItem[] => {
@@ -486,9 +519,7 @@ export const QuickSearchModal: React.FC = () => {
                       onMouseEnter={() => setSelectedIndex(index)}
                     >
                       <span className={styles.itemIcon}>
-                        {collection.isPrivate ? (
-                          lockIcon
-                        ) : collection.icon ? (
+                        {collection.icon ? (
                           collection.icon
                         ) : (
                           <span className={styles.itemIconDefault}>
@@ -587,9 +618,6 @@ export const QuickSearchModal: React.FC = () => {
                             </span>
                           </span>
                         </div>
-                        {scene.isPrivate && (
-                          <span className={styles.itemBadge}>{lockIcon}</span>
-                        )}
                       </button>
                     );
                   })}

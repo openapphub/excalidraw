@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { t } from "@excalidraw/excalidraw/i18n";
+import { openConfirmModal } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirmState";
 
 import { useAtom, useAtomValue, useSetAtom } from "../app-jotai";
 import {
@@ -18,9 +19,11 @@ import {
   createCollection as createCollectionApi,
   updateCollection as updateCollectionApi,
   deleteCollection as deleteCollectionApi,
+  getScene,
   type Collection,
 } from "../auth/workspaceApi";
-import { parseUrl } from "../router";
+import { navigateTo, parseUrl } from "../router";
+import { getCollectionDeleteRedirect } from "../components/Workspace/collectionMutationRouting";
 
 /**
  * Fields needed for collection list views (sidebar, nav, etc.)
@@ -35,6 +38,7 @@ const COLLECTION_LIST_FIELDS = [
   "canWrite",
   "isOwner",
 ];
+const EMPTY_COLLECTIONS: Collection[] = [];
 
 interface CreateCollectionData {
   name: string;
@@ -92,10 +96,14 @@ export function useCollections({
 
   // Track if we've set the default collection to prevent infinite loops
   const hasSetDefaultCollectionRef = useRef(false);
+  const workspaceIdRef = useRef(workspaceId);
+  const activeCollectionIdRef = useRef(activeCollectionId);
+  workspaceIdRef.current = workspaceId;
+  activeCollectionIdRef.current = activeCollectionId;
 
   // React Query for fetching collections
   const {
-    data: fetchedCollections = [],
+    data: fetchedCollections = EMPTY_COLLECTIONS,
     isLoading,
     refetch,
   } = useQuery({
@@ -109,21 +117,28 @@ export function useCollections({
 
   // Sync React Query data to Jotai atom
   useEffect(() => {
-    if (fetchedCollections.length > 0) {
-      setCollections(fetchedCollections as CollectionData[]);
+    setCollections(fetchedCollections as CollectionData[]);
+    if (
+      activeCollectionId &&
+      !fetchedCollections.some(
+        (collection) => collection.id === activeCollectionId,
+      )
+    ) {
+      // Workspace 切换或 Collection 删除后，旧 ID 不能继续参与新 Workspace
+      // 的 Scene 查询，否则会把 workspaceId 与旧 collectionId 组合发送到后端。
+      setActiveCollectionId(null);
     }
-  }, [fetchedCollections, setCollections]);
+  }, [
+    fetchedCollections,
+    setCollections,
+    activeCollectionId,
+    setActiveCollectionId,
+    workspaceId,
+  ]);
 
   // Set default active collection to Private when collections are loaded
   // Skip if we're on a scene URL - let scene loading handle the collection selection
   useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log("[useCollections] Default collection effect:", {
-      collectionsLength: collections.length,
-      activeCollectionId,
-      hasSetDefault: hasSetDefaultCollectionRef.current,
-    });
-
     if (
       collections.length > 0 &&
       !activeCollectionId &&
@@ -132,12 +147,9 @@ export function useCollections({
       // Don't set default collection if we're loading a scene from URL
       // The scene loader will set the correct collection from the scene data
       const route = parseUrl();
-      // eslint-disable-next-line no-console
-      console.log("[useCollections] Parsed route:", route.type);
-
-      if (route.type === "scene") {
-        // eslint-disable-next-line no-console
-        console.log("[useCollections] Skipping default - scene URL detected");
+      if (route.type === "scene" || route.type === "collection") {
+        // Scene/Collection URL 指定了资源身份。资源不存在时保持空状态，不能
+        // 悄悄回退到第一个 Collection，让旧 URL 指向另一份内容。
         return;
       }
 
@@ -168,20 +180,25 @@ export function useCollections({
       if (!workspaceId || !data.name.trim()) {
         return null;
       }
+      const mutationWorkspaceId = workspaceId;
 
       try {
-        const collection = await createCollectionApi(workspaceId, {
+        const collection = await createCollectionApi(mutationWorkspaceId, {
           name: data.name.trim(),
           icon: data.icon,
         });
 
-        // Update local state optimistically
-        setCollections((prev) => [...prev, collection as CollectionData]);
+        if (workspaceIdRef.current === mutationWorkspaceId) {
+          setCollections((prev) => [...prev, collection as CollectionData]);
+        }
 
         // Invalidate and refetch
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.collections.list(workspaceId),
-        });
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.collections.all,
+          }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+        ]);
 
         triggerCollectionsRefresh();
         return collection;
@@ -202,24 +219,32 @@ export function useCollections({
       id: string,
       data: UpdateCollectionData,
     ): Promise<Collection | null> => {
+      if (!workspaceId) {
+        return null;
+      }
+      const mutationWorkspaceId = workspaceId;
       try {
         const updated = await updateCollectionApi(id, {
           name: data.name?.trim(),
           icon: data.icon || undefined,
         });
 
-        // Update local state optimistically
-        setCollections((prev) =>
-          prev.map((c) =>
-            c.id === updated.id ? (updated as CollectionData) : c,
-          ),
-        );
+        if (workspaceIdRef.current === mutationWorkspaceId) {
+          setCollections((prev) =>
+            prev.map((c) =>
+              c.id === updated.id ? (updated as CollectionData) : c,
+            ),
+          );
+        }
 
         // Invalidate cache
         if (workspaceId) {
-          await queryClient.invalidateQueries({
-            queryKey: queryKeys.collections.list(workspaceId),
-          });
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.collections.all,
+            }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+          ]);
         }
 
         triggerCollectionsRefresh();
@@ -238,27 +263,78 @@ export function useCollections({
   // Delete collection
   const deleteCollection = useCallback(
     async (collectionId: string): Promise<boolean> => {
-      if (!confirm(t("workspace.confirmDeleteCollection"))) {
+      if (!workspaceId) {
+        return false;
+      }
+      const mutationWorkspaceId = workspaceId;
+      const confirmed = await openConfirmModal({
+        title: t("workspace.delete"),
+        description: t("workspace.confirmDeleteCollection"),
+        actionLabel: t("workspace.delete"),
+        color: "danger",
+      });
+      if (!confirmed) {
         return false;
       }
 
       try {
+        const routeAtDelete = parseUrl();
+        let currentSceneBelongsToCollection = false;
+        if (routeAtDelete.type === "scene") {
+          try {
+            const currentScene = await getScene(routeAtDelete.sceneId);
+            currentSceneBelongsToCollection =
+              currentScene.collectionId === collectionId;
+          } catch (error) {
+            throw new Error("无法验证当前 Scene 的 Collection 归属。", {
+              cause: error,
+            });
+          }
+        }
         await deleteCollectionApi(collectionId);
 
-        // Update local state
-        setCollections((prev) => prev.filter((c) => c.id !== collectionId));
+        const isCurrentWorkspace =
+          workspaceIdRef.current === mutationWorkspaceId;
+        if (isCurrentWorkspace) {
+          setCollections((prev) => prev.filter((c) => c.id !== collectionId));
+        }
+
+        // 删除 Collection 会删除其所属 Scene。所有 Scene 查询（包括
+        // Dashboard 的 Recently modified）必须同步剔除，不能让旧卡片在
+        // 网络回填前继续打开一个已经不存在的画布。
+        queryClient.setQueriesData<
+          import("../auth/workspaceApi").WorkspaceScene[]
+        >({ queryKey: queryKeys.scenes.all }, (previous) =>
+          previous?.filter((scene) => scene.collectionId !== collectionId),
+        );
 
         // If deleted collection was active, switch to private
-        if (activeCollectionId === collectionId) {
+        if (
+          isCurrentWorkspace &&
+          activeCollectionIdRef.current === collectionId
+        ) {
           setActiveCollectionId(privateCollection?.id || null);
+        }
+        const redirect = getCollectionDeleteRedirect({
+          routeAtStart: routeAtDelete,
+          currentRoute: parseUrl(),
+          collectionId,
+          currentSceneBelongsToCollection,
+        });
+        if (redirect) {
+          navigateTo(redirect);
         }
 
         // Invalidate cache
-        if (workspaceId) {
-          await queryClient.invalidateQueries({
-            queryKey: queryKeys.collections.list(workspaceId),
-          });
-        }
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.collections.all,
+          }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.notifications.all,
+          }),
+        ]);
 
         triggerCollectionsRefresh();
         return true;
@@ -271,9 +347,8 @@ export function useCollections({
       }
     },
     [
-      workspaceId,
-      activeCollectionId,
       privateCollection,
+      workspaceId,
       setActiveCollectionId,
       setCollections,
       queryClient,

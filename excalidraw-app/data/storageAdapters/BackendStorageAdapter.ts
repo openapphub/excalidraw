@@ -1,9 +1,9 @@
-import { nanoid } from "nanoid";
-
 import { dehydrateCanvasData, hydrateCanvasData } from "../storage";
 import { isIndexedDbCanvasId } from "../canvasId";
 
 import { generateThumbnail } from "../thumbnail";
+import { createScene } from "../../auth/workspaceApi";
+import { sceneClientHeaders } from "../../auth/sceneClient";
 
 import type {
   CanvasData,
@@ -26,6 +26,7 @@ const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...sceneClientHeaders(),
   };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -122,7 +123,6 @@ export class BackendStorageAdapter implements IStorageAdapter {
   }
 
   async createCanvas(data: CanvasData): Promise<CanvasMetadata> {
-    const newId = nanoid();
     const token = localStorage.getItem("token");
     if (!token) {
       throw new Error("Authentication token not found.");
@@ -137,17 +137,18 @@ export class BackendStorageAdapter implements IStorageAdapter {
       thumbnail: data.elements.length > 0 ? thumbnail : undefined,
     };
 
-    await this.saveCanvas(newId, dataWithThumbnail);
+    const dehydrated = dehydrateCanvasData(dataWithThumbnail);
+    const scene = await createScene({
+      title: data.appState?.name || "Untitled",
+      data: JSON.stringify(dehydrated),
+    });
     return {
-      id: newId,
-      name: data.appState?.name || "Untitled",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      id: scene.id,
+      name: scene.title,
+      createdAt: scene.createdAt,
+      updatedAt: scene.updatedAt,
       thumbnail: dataWithThumbnail.thumbnail,
-      // appState 里没有 workspaceId 时默认归入 "default" 工作区。
-      workspaceId:
-        (data.appState as { workspaceId?: string } | undefined)?.workspaceId ||
-        "default",
+      workspaceId: scene.workspaceId,
     };
   }
 

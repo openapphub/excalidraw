@@ -1,10 +1,10 @@
+import { UserIdleState } from "@excalidraw/common";
 import { CaptureUpdateAction } from "@excalidraw/excalidraw";
 import { trackEvent } from "@excalidraw/excalidraw/analytics";
 import { encryptData } from "@excalidraw/excalidraw/data/encryption";
 import { newElementWith } from "@excalidraw/element";
 import throttle from "lodash.throttle";
 
-import type { UserIdleState } from "@excalidraw/common";
 import type { OrderedExcalidrawElement } from "@excalidraw/element/types";
 import type {
   OnUserFollowedPayload,
@@ -25,6 +25,19 @@ import type { Socket } from "socket.io-client";
 
 const COLLAB_CLIENT_ID_STORAGE_KEY = "excalidraw-collab-client-id";
 
+type RealtimeConnectionState =
+  | "closed"
+  | "connecting"
+  | "joining"
+  | "live"
+  | "reconnecting";
+
+type RoomJoinedPayload = {
+  roomId: string;
+  socketId: SocketId;
+  clients: SocketId[];
+};
+
 const getCollabClientId = () => {
   try {
     const existing = window.sessionStorage.getItem(
@@ -44,9 +57,9 @@ const getCollabClientId = () => {
 class Portal {
   collab: TCollabClass;
   socket: Socket | null = null;
-  socketInitialized: boolean = false; // we don't want the socket to emit any updates until it is fully initialized
-  /** 工作区自动协作：画面已在本地，进房即可广播，不必等 Firebase / SCENE_INIT。 */
-  broadcastBeforeInit: boolean = false;
+  /** 快照恢复状态只影响持久化，不再控制实时传输。 */
+  snapshotInitialized: boolean = false;
+  realtimeState: RealtimeConnectionState = "closed";
   roomId: string | null = null;
   roomKey: string | null = null;
   clientId: string = getCollabClientId();
@@ -60,15 +73,66 @@ class Portal {
     this.socket = socket;
     this.roomId = id;
     this.roomKey = key;
+    this.snapshotInitialized = false;
+    this.realtimeState = socket.connected ? "joining" : "connecting";
 
     // Initialize socket listeners
-    this.socket.on("init-room", () => {
-      if (this.socket) {
-        this.socket.emit("join-room", this.roomId, this.clientId);
-        trackEvent("share", "room joined");
+    let joinedSocketId: string | null = null;
+    let hasConfirmedRoom = false;
+    const joinCurrentSocketRoom = () => {
+      if (
+        this.socket !== socket ||
+        !socket.connected ||
+        !socket.id ||
+        !this.roomId ||
+        joinedSocketId === socket.id
+      ) {
+        return;
+      }
+      joinedSocketId = socket.id;
+      this.realtimeState = "joining";
+      socket.emit("join-room", this.roomId, this.clientId);
+      trackEvent("share", "room joined");
+    };
+    // 服务端 init-room 保留兼容；客户端 connect 保证自动重连即使错过
+    // init-room，也会用新的 socketId 重新加入原房间。
+    this.socket.on("connect", joinCurrentSocketRoom);
+    this.socket.on("init-room", joinCurrentSocketRoom);
+    this.socket.on("connect_error", () => {
+      if (this.socket === socket) {
+        this.realtimeState = "reconnecting";
+      }
+    });
+    this.socket.on(WS_EVENTS.ROOM_JOINED, (payload: RoomJoinedPayload) => {
+      if (
+        this.socket !== socket ||
+        payload.roomId !== this.roomId ||
+        payload.socketId !== socket.id
+      ) {
+        return;
+      }
+      const isReconnect = hasConfirmedRoom;
+      hasConfirmedRoom = true;
+      this.realtimeState = "live";
+      this.collab.setCollaborators(payload.clients);
+      if (isReconnect && payload.clients.length > 1) {
+        // 断线期间的本地变更用一次全量 UPDATE 补齐。首次加入已有房间
+        // 由旧成员的 INIT 初始化，避免双方全量场景交叉覆盖。
+        void this.broadcastScene(
+          WS_SUBTYPES.UPDATE,
+          this.collab.getSceneElementsIncludingDeleted(),
+          true,
+        ).then((didBroadcast) => {
+          if (didBroadcast) {
+            void this.collab.saveCollaboration();
+          }
+        });
       }
     });
     this.socket.on("new-user", async (_socketId: string) => {
+      if (this.socket !== socket) {
+        return;
+      }
       this.broadcastScene(
         WS_SUBTYPES.INIT,
         this.collab.getSceneElementsIncludingDeleted(),
@@ -76,7 +140,21 @@ class Portal {
       );
     });
     this.socket.on("room-user-change", (clients: SocketId[]) => {
+      if (this.socket !== socket) {
+        return;
+      }
       this.collab.setCollaborators(clients);
+      // room-user-change 只有 socket id。立即广播一次当前用户名和在线状态，
+      // 否则新成员要等对方移动鼠标或触发空闲状态后才能显示头像。
+      void this.broadcastIdleChange(UserIdleState.ACTIVE);
+    });
+    this.socket.on("disconnect", () => {
+      if (this.socket !== socket) {
+        return;
+      }
+      joinedSocketId = null;
+      this.realtimeState = "reconnecting";
+      this.collab.setCollaborators([]);
     });
 
     return socket;
@@ -91,17 +169,18 @@ class Portal {
     this.socket = null;
     this.roomId = null;
     this.roomKey = null;
-    this.socketInitialized = false;
-    this.broadcastBeforeInit = false;
+    this.snapshotInitialized = false;
+    this.realtimeState = "closed";
     this.broadcastedElementVersions = new Map();
   }
 
   isOpen() {
     return !!(
       this.socket &&
+      this.socket.connected &&
       this.roomId &&
       this.roomKey &&
-      (this.socketInitialized || this.broadcastBeforeInit)
+      this.realtimeState === "live"
     );
   }
 
@@ -110,21 +189,48 @@ class Portal {
     volatile: boolean = false,
     roomId?: string,
   ) {
-    if (this.isOpen()) {
-      const json = JSON.stringify(data);
-      const encoded = new TextEncoder().encode(json);
-      const { encryptedBuffer, iv } = await encryptData(this.roomKey!, encoded);
-
-      this.socket?.emit(
-        volatile ? WS_EVENTS.SERVER_VOLATILE : WS_EVENTS.SERVER,
-        roomId ?? this.roomId,
-        encryptedBuffer,
-        iv,
-      );
+    const socket = this.socket;
+    const currentRoomId = this.roomId;
+    const roomKey = this.roomKey;
+    const targetRoomId = roomId ?? currentRoomId;
+    if (
+      !this.isOpen() ||
+      !socket ||
+      !currentRoomId ||
+      !roomKey ||
+      !targetRoomId
+    ) {
+      return false;
     }
+    const json = JSON.stringify(data);
+    const encoded = new TextEncoder().encode(json);
+    const { encryptedBuffer, iv } = await encryptData(roomKey, encoded);
+
+    if (
+      this.socket !== socket ||
+      this.roomId !== currentRoomId ||
+      this.roomKey !== roomKey ||
+      !this.isOpen()
+    ) {
+      return false;
+    }
+
+    socket.emit(
+      volatile ? WS_EVENTS.SERVER_VOLATILE : WS_EVENTS.SERVER,
+      targetRoomId,
+      encryptedBuffer,
+      iv,
+    );
+    return true;
   }
 
   queueFileUpload = throttle(async () => {
+    const socket = this.socket;
+    const roomId = this.roomId;
+    const roomKey = this.roomKey;
+    if (!this.isOpen() || !socket || !roomId || !roomKey) {
+      return;
+    }
     try {
       await this.collab.fileManager.saveFiles({
         elements: this.collab.excalidrawAPI.getSceneElementsIncludingDeleted(),
@@ -138,6 +244,15 @@ class Portal {
           },
         });
       }
+    }
+
+    if (
+      this.socket !== socket ||
+      this.roomId !== roomId ||
+      this.roomKey !== roomKey ||
+      !this.isOpen()
+    ) {
+      return;
     }
 
     let isChanged = false;
@@ -171,6 +286,9 @@ class Portal {
     if (updateType === WS_SUBTYPES.INIT && !syncAll) {
       throw new Error("syncAll must be true when sending SCENE.INIT");
     }
+    if (!this.isOpen()) {
+      return false;
+    }
 
     // sync out only the elements we think we need to to save bandwidth.
     // periodically we'll resync the whole thing to make sure no one diverges
@@ -197,26 +315,34 @@ class Portal {
       },
     };
 
+    const didBroadcast = await this._broadcastSocketData(
+      data as SocketUpdateData,
+    );
+    if (!didBroadcast) {
+      return false;
+    }
+
     for (const syncableElement of syncableElements) {
       this.broadcastedElementVersions.set(
         syncableElement.id,
         syncableElement.version,
       );
     }
-
     this.queueFileUpload();
-
-    await this._broadcastSocketData(data as SocketUpdateData);
+    return true;
   };
 
-  broadcastIdleChange = (userState: UserIdleState) => {
+  broadcastIdleChange = (
+    userState: UserIdleState,
+    username = this.collab.state.username,
+  ) => {
     if (this.socket?.id) {
       const data: SocketUpdateDataSource["IDLE_STATUS"] = {
         type: WS_SUBTYPES.IDLE_STATUS,
         payload: {
           socketId: this.socket.id as SocketId,
           userState,
-          username: this.collab.state.username,
+          username,
         },
       };
       return this._broadcastSocketData(

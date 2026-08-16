@@ -179,12 +179,12 @@
   transition: background-color 0.15s;
 
   &:hover {
-    background: #f0efff;
+    background: var(--button-hover-bg, #f1f0ff);
   }
 }
 
 .menuItemActive {
-  background: #6a65db;
+  background: var(--color-primary, #6965db);
   color: white;
 }
 
@@ -265,13 +265,14 @@
   padding: 10px 12px;
   background: var(--default-bg-color, #f5f5f5);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 6px;
   transition: border-color 0.15s, background-color 0.15s;
   flex-shrink: 0;
 
   &:focus-within {
     background: var(--island-bg-color, #fff);
     border-color: var(--color-primary, #6965db);
+    box-shadow: 0 0 0 2px rgba(105, 101, 219, 0.14);
   }
 }
 
@@ -327,7 +328,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 6px;
   transition: background-color 0.15s;
   flex: 1;
   min-width: 0;
@@ -365,23 +366,9 @@
 }
 
 .notificationButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: none;
-  border: 1px solid var(--default-border-color, #e5e5e5);
-  border-radius: 8px;
-  cursor: pointer;
-  color: var(--icon-fill-color, #6b6b6b);
-  transition: background-color 0.15s, border-color 0.15s;
-  flex-shrink: 0;
+  @include icon-button(34px);
 
-  &:hover {
-    background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
-    border-color: var(--text-secondary-color, #9b9b9b);
-  }
+  flex-shrink: 0;
 
   svg {
     width: 18px;
@@ -437,23 +424,9 @@
 }
 
 .loginButton {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding: 12px 24px;
-  background: var(--color-primary, #6965db);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.15s;
+  @include primary-button;
 
-  &:hover {
-    background: var(--color-primary-darker, #5b57c5);
-  }
+  margin-top: 16px;
 
   svg {
     width: 18px;
@@ -502,7 +475,8 @@
 
 .dialog {
   background: var(--island-bg-color, #fff);
-  border-radius: 12px;
+  border: 1px solid var(--default-border-color, #dedee5);
+  border-radius: 8px;
   padding: 24px;
   width: 100%;
   max-width: 400px;
@@ -545,21 +519,10 @@
   }
 
   input {
-    padding: 10px 12px;
-    background: var(--default-bg-color, #f5f5f5);
-    border: 1px solid transparent;
-    border-radius: 8px;
-    font-size: 14px;
-    color: var(--text-primary-color, #1b1b1f);
-    transition: border-color 0.15s, background-color 0.15s;
-    height: 56px;
-    box-sizing: border-box;
+    @include field-control;
 
-    &:focus {
-      outline: none;
-      background: var(--island-bg-color, #fff);
-      border-color: var(--color-primary, #6965db);
-    }
+    height: 40px;
+    box-sizing: border-box;
   }
 }
 
@@ -579,40 +542,11 @@
 }
 
 .dialogCancel {
-  padding: 10px 16px;
-  background: none;
-  border: 1px solid var(--default-border-color, #e5e5e5);
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary-color, #1b1b1f);
-  cursor: pointer;
-  transition: background-color 0.15s;
-
-  &:hover {
-    background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
-  }
+  @include secondary-button;
 }
 
 .dialogConfirm {
-  padding: 10px 16px;
-  background: var(--color-primary, #6965db);
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: white;
-  cursor: pointer;
-  transition: background-color 0.15s;
-
-  &:hover:not(:disabled) {
-    background: var(--color-primary-darker, #5b57c5);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  @include primary-button;
 }
 
 // ============================================
@@ -683,6 +617,65 @@
   background: var(--color-primary-light, rgba(105, 101, 219, 0.15));
   border-color: var(--color-primary, #6965db);
   color: var(--color-primary, #6965db);
+}
+
+@media (max-width: 700px) {
+  .sidebar {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    max-height: min(44dvh, 360px);
+    margin-left: 0;
+    display: none;
+    border-right: 0;
+    border-bottom: 1px solid transparent;
+    box-shadow: none;
+    transition: border-color 0.2s ease-out, visibility 0s 0.2s,
+      opacity 0.2s ease-out;
+  }
+
+  .open {
+    display: flex;
+    border-bottom-color: var(--default-border-color, #e5e5e5);
+    transition: border-color 0.2s ease-out, visibility 0s 0s,
+      opacity 0.2s ease-out;
+  }
+
+  .header {
+    min-height: 52px;
+    padding: 8px 12px;
+    padding-right: 92px;
+  }
+
+  .workspaceAvatar {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .content {
+    flex: none;
+    gap: 8px;
+    padding: 0 12px 12px;
+    overflow: visible;
+  }
+
+  .search,
+  .divider {
+    display: none;
+  }
+
+  .footer {
+    position: absolute;
+    top: 9px;
+    right: 52px;
+    padding: 0;
+  }
+
+  .userButton {
+    display: none;
+  }
 }
 
 // ============================================

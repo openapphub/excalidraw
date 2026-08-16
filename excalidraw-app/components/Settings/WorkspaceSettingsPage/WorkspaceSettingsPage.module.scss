@@ -4,15 +4,13 @@
 @use "../../../styles/mixins" as *;
 
 .page {
-  // Define --ui-font locally since component is outside .excalidraw container
-  --ui-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, Segoe UI,
-    Roboto, Helvetica, Arial, sans-serif;
-  font-family: var(--ui-font);
+  @include workspace-page;
 
-  flex: 1;
-  padding: 32px 48px;
-  overflow-y: auto;
-  background: var(--default-bg-color, #fafafa);
+  > div {
+    width: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
+  }
 }
 
 // Empty state
@@ -25,8 +23,8 @@
 // Title
 .title {
   margin: 0 0 8px;
-  font-size: 25px;
-  font-weight: 500;
+  font-size: 24px;
+  font-weight: 600;
   color: var(--text-primary-color, #1b1b1f);
 }
 
@@ -69,8 +67,8 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 32px;
-  margin-bottom: 32px;
-  padding-bottom: 32px;
+  margin-bottom: 28px;
+  padding-bottom: 28px;
   border-bottom: 1px solid var(--default-border-color, #e5e5e5);
 
   &:last-child {
@@ -118,7 +116,8 @@
 .avatar {
   width: 80px;
   height: 80px;
-  border-radius: 12px;
+  border: 1px solid var(--default-border-color, #e5e5e5);
+  border-radius: 8px;
   overflow: hidden;
   position: relative;
   cursor: pointer;
@@ -142,7 +141,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-primary, #6965db);
   color: white;
   font-size: 28px;
   font-weight: 600;
@@ -183,8 +182,8 @@
   padding: 12px 16px;
   background: var(--island-bg-color, #ffffff);
   border: 1px solid var(--default-border-color, #e5e5e5);
-  border-radius: 8px;
-  min-height: 48px;
+  border-radius: 6px;
+  min-height: 44px;
 }
 
 .fieldReadonly {
@@ -212,18 +211,7 @@
 }
 
 .editButton {
-  padding: 8px;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text-secondary-color, #6b6b6b);
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: var(--default-border-color, #e5e5e5);
-    color: var(--text-primary-color, #1b1b1f);
-  }
+  @include icon-button(32px);
 
   svg {
     width: 18px;
@@ -240,18 +228,7 @@
 
 .input {
   width: 100%;
-  padding: 12px 16px;
-  background: var(--island-bg-color, #ffffff);
-  border: 1px solid var(--default-border-color, #e5e5e5);
-  border-radius: 8px;
-  font-size: 15px;
-  color: var(--text-primary-color, #1b1b1f);
-  outline: none;
-  transition: border-color 0.15s ease;
-
-  &:focus {
-    border-color: var(--color-primary, #6965db);
-  }
+  @include field-control;
 
   &::placeholder {
     color: var(--text-secondary-color, #6b6b6b);
@@ -307,14 +284,17 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 16px;
+  min-height: 36px;
+  padding: 8px 14px;
   font-size: 14px;
   font-weight: 500;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
   border: none;
   white-space: nowrap;
+
+  @include focus-visible-ring;
 
   svg {
     width: 18px;
@@ -452,13 +432,29 @@
     flex-direction: column;
   }
 
+  .section {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .sectionTitle,
+  .dangerInfo {
+    flex-basis: auto;
+  }
+
+  .sectionContent,
+  .dangerContent,
+  .avatarInfo {
+    width: 100%;
+  }
+
   .dangerItem {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
 
   .sectionDanger {
     margin: 32px 0 0;
-    padding: 16px;
+    padding: 16px 0 0;
   }
 }

@@ -3,6 +3,7 @@
  */
 
 import { apiRequest, jsonBody } from "./client";
+import { sceneClientHeaders } from "../sceneClient";
 
 import type {
   Collection,
@@ -107,6 +108,7 @@ export async function deleteCollection(
 ): Promise<{ success: boolean }> {
   return apiRequest(`/collections/${collectionId}`, {
     method: "DELETE",
+    headers: sceneClientHeaders(),
     errorMessage: "Failed to delete collection",
   });
 }
@@ -134,6 +136,7 @@ export async function moveCollectionToWorkspace(
 ): Promise<Collection> {
   return apiRequest(`/collections/${collectionId}/move-to-workspace`, {
     method: "POST",
+    headers: sceneClientHeaders(),
     ...jsonBody({ targetWorkspaceId }),
     errorMessage: "Failed to move collection",
   });

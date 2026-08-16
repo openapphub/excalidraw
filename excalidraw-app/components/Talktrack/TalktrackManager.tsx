@@ -79,6 +79,8 @@ export const TalktrackManager: React.FC<TalktrackManagerProps> = ({
               // Start recording
               recorderRef.current?.start().catch((err) => {
                 console.error("Failed to start recording:", err);
+                recorderRef.current?.cancel();
+                setCameraEnabled(false);
                 excalidrawAPI?.setToast({
                   message: "录制启动失败",
                   duration: 3000,
@@ -238,9 +240,7 @@ export const TalktrackManager: React.FC<TalktrackManagerProps> = ({
 
       {/* Error toast */}
       {recordingState.status === "error" && recordingState.error && (
-        <div className="talktrack-error-toast">
-          {recordingState.error}
-        </div>
+        <div className="talktrack-error-toast">{recordingState.error}</div>
       )}
 
       {/* Countdown + error styles */}

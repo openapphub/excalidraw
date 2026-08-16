@@ -9,14 +9,11 @@ import { restoreElements } from "@excalidraw/excalidraw/data/restore";
 import { getSceneVersion } from "@excalidraw/element";
 import { initializeApp } from "firebase/app";
 import {
-  getFirestore,
-  connectFirestoreEmulator,
-  doc,
-  getDoc,
-  runTransaction,
-  Bytes,
-} from "firebase/firestore";
-import { getStorage, ref, uploadBytes, connectStorageEmulator } from "firebase/storage";
+  getStorage,
+  ref,
+  uploadBytes,
+  connectStorageEmulator,
+} from "firebase/storage";
 
 import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
 import type {
@@ -32,6 +29,7 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 import { FILE_CACHE_MAX_AGE_SEC } from "../app_constants";
+import { sceneClientHeaders } from "../auth/sceneClient";
 
 import { getSyncableElements } from ".";
 
@@ -55,7 +53,6 @@ try {
 }
 
 let firebaseApp: ReturnType<typeof initializeApp> | null = null;
-let firestore: ReturnType<typeof getFirestore> | null = null;
 let firebaseStorage: ReturnType<typeof getStorage> | null = null;
 
 const _initializeFirebase = () => {
@@ -63,21 +60,6 @@ const _initializeFirebase = () => {
     firebaseApp = initializeApp(FIREBASE_CONFIG);
   }
   return firebaseApp;
-};
-
-const _getFirestore = () => {
-  if (!firestore) {
-    firestore = getFirestore(_initializeFirebase());
-    // Self-hosted: point Firestore at the local Go backend over plain HTTP.
-    // Without this, the SDK defaults to `ssl: true` and tries
-    // `https://<host>/v1/projects/...` which fails against our http server.
-    const emulatorHost = import.meta.env.VITE_APP_FIRESTORE_EMULATOR_HOST;
-    if (emulatorHost) {
-      const [host, port] = emulatorHost.split(":");
-      connectFirestoreEmulator(firestore, host, parseInt(port, 10));
-    }
-  }
-  return firestore;
 };
 
 const _getStorage = () => {
@@ -103,9 +85,95 @@ export const loadFirebaseStorage = async () => {
 
 type FirebaseStoredScene = {
   sceneVersion: number;
-  iv: Bytes;
-  ciphertext: Bytes;
+  iv: Uint8Array<ArrayBuffer>;
+  ciphertext: Uint8Array<ArrayBuffer>;
 };
+
+type RoomSnapshot = {
+  revision: number;
+  sceneVersion: number;
+  ciphertext: string;
+  iv: string;
+  updatedAt: string;
+};
+
+const ROOM_SNAPSHOT_MAX_RETRIES = 5;
+
+const uint8ArrayToBase64 = (bytes: Uint8Array<ArrayBuffer>) => {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(
+      ...bytes.subarray(offset, offset + chunkSize),
+    );
+  }
+  return window.btoa(binary);
+};
+
+const base64ToUint8Array = (value: string) => {
+  const binary = window.atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+};
+
+const roomSnapshotUrl = (roomId: string) =>
+  `/api/v2/collab/rooms/${encodeURIComponent(roomId)}`;
+
+const roomSnapshotHeaders = (includeContentType = false) => {
+  const token = localStorage.getItem("token");
+  return {
+    ...(includeContentType ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...sceneClientHeaders(),
+  };
+};
+
+const loadRoomSnapshot = async (roomId: string) => {
+  const response = await fetch(roomSnapshotUrl(roomId), {
+    headers: roomSnapshotHeaders(),
+    cache: "no-store",
+  });
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`room snapshot load failed: ${response.status}`);
+  }
+  return (await response.json()) as RoomSnapshot;
+};
+
+const saveRoomSnapshot = async (
+  roomId: string,
+  expectedRevision: number,
+  storedScene: FirebaseStoredScene,
+) => {
+  const response = await fetch(roomSnapshotUrl(roomId), {
+    method: "PUT",
+    headers: roomSnapshotHeaders(true),
+    body: JSON.stringify({
+      expectedRevision,
+      sceneVersion: storedScene.sceneVersion,
+      ciphertext: uint8ArrayToBase64(storedScene.ciphertext),
+      iv: uint8ArrayToBase64(storedScene.iv),
+    }),
+  });
+  if (response.status === 409) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`room snapshot save failed: ${response.status}`);
+  }
+  return (await response.json()) as RoomSnapshot;
+};
+
+const decodeRoomSnapshot = (snapshot: RoomSnapshot): FirebaseStoredScene => ({
+  sceneVersion: snapshot.sceneVersion,
+  ciphertext: base64ToUint8Array(snapshot.ciphertext),
+  iv: base64ToUint8Array(snapshot.iv),
+});
 
 const encryptElements = async (
   key: string,
@@ -122,10 +190,7 @@ const decryptElements = async (
   data: FirebaseStoredScene,
   roomKey: string,
 ): Promise<readonly ExcalidrawElement[]> => {
-  const ciphertext = data.ciphertext.toUint8Array() as Uint8Array<ArrayBuffer>;
-  const iv = data.iv.toUint8Array() as Uint8Array<ArrayBuffer>;
-
-  const decrypted = await decryptData(iv, ciphertext, roomKey);
+  const decrypted = await decryptData(data.iv, data.ciphertext, roomKey);
   const decodedData = new TextDecoder("utf-8").decode(
     new Uint8Array(decrypted),
   );
@@ -166,10 +231,55 @@ export const saveFilesToFirebase = async ({
   prefix: string;
   files: { id: FileId; buffer: Uint8Array }[];
 }) => {
-  const storage = await loadFirebaseStorage();
-
   const erroredFiles: FileId[] = [];
   const savedFiles: FileId[] = [];
+
+  const storageHost = import.meta.env.VITE_APP_FIRESTORE_EMULATOR_HOST;
+  if (storageHost) {
+    const token = localStorage.getItem("token");
+    await Promise.all(
+      files.map(async ({ id, buffer }) => {
+        try {
+          const objectPath = `${prefix}/${id}`.replace(/^\//, "");
+          const boundary = `excalidraw-${crypto.randomUUID()}`;
+          const metadata = JSON.stringify({
+            name: objectPath,
+            cacheControl: `public, max-age=${FILE_CACHE_MAX_AGE_SEC}`,
+            contentType: MIME_TYPES.binary,
+          });
+          const fileBuffer = new ArrayBuffer(buffer.byteLength);
+          new Uint8Array(fileBuffer).set(buffer);
+          const body = new Blob([
+            `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
+            `--${boundary}\r\nContent-Type: ${MIME_TYPES.binary}\r\n\r\n`,
+            fileBuffer,
+            `\r\n--${boundary}--\r\n`,
+          ]);
+          const response = await fetch(
+            `/v0/b/${encodeURIComponent(FIREBASE_CONFIG.storageBucket)}/o`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": `multipart/related; boundary=${boundary}`,
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                ...sceneClientHeaders(),
+              },
+              body,
+            },
+          );
+          if (!response.ok) {
+            throw new Error(`storage upload failed: ${response.status}`);
+          }
+          savedFiles.push(id);
+        } catch {
+          erroredFiles.push(id);
+        }
+      }),
+    );
+    return { savedFiles, erroredFiles };
+  }
+
+  const storage = await loadFirebaseStorage();
 
   await Promise.all(
     files.map(async ({ id, buffer }) => {
@@ -196,8 +306,8 @@ const createFirebaseSceneDocument = async (
   const { ciphertext, iv } = await encryptElements(roomKey, elements);
   return {
     sceneVersion,
-    ciphertext: Bytes.fromUint8Array(new Uint8Array(ciphertext)),
-    iv: Bytes.fromUint8Array(iv),
+    ciphertext: new Uint8Array(ciphertext),
+    iv,
   } as FirebaseStoredScene;
 };
 
@@ -218,54 +328,44 @@ export const saveToFirebase = async (
     return null;
   }
 
-  const firestore = _getFirestore();
-  const docRef = doc(firestore, "scenes", roomId);
+  for (let attempt = 0; attempt < ROOM_SNAPSHOT_MAX_RETRIES; attempt++) {
+    const snapshot = await loadRoomSnapshot(roomId);
+    let storedElements = elements;
 
-  const storedScene = await runTransaction(firestore, async (transaction) => {
-    const snapshot = await transaction.get(docRef);
-
-    if (!snapshot.exists() || opts?.replace) {
-      const storedScene = await createFirebaseSceneDocument(elements, roomKey);
-
-      if (snapshot.exists()) {
-        transaction.update(docRef, storedScene);
-      } else {
-        transaction.set(docRef, storedScene);
-      }
-
-      return storedScene;
+    if (snapshot && !opts?.replace) {
+      const previousElements = getSyncableElements(
+        restoreElements(
+          await decryptElements(decodeRoomSnapshot(snapshot), roomKey),
+          null,
+        ),
+      );
+      storedElements = getSyncableElements(
+        reconcileElements(
+          elements,
+          previousElements as OrderedExcalidrawElement[] as RemoteExcalidrawElement[],
+          appState,
+        ),
+      );
     }
 
-    const prevStoredScene = snapshot.data() as FirebaseStoredScene;
-    const prevStoredElements = getSyncableElements(
-      restoreElements(await decryptElements(prevStoredScene, roomKey), null),
-    );
-    const reconciledElements = getSyncableElements(
-      reconcileElements(
-        elements,
-        prevStoredElements as OrderedExcalidrawElement[] as RemoteExcalidrawElement[],
-        appState,
-      ),
-    );
-
     const storedScene = await createFirebaseSceneDocument(
-      reconciledElements,
+      storedElements,
       roomKey,
     );
+    const savedSnapshot = await saveRoomSnapshot(
+      roomId,
+      snapshot?.revision ?? 0,
+      storedScene,
+    );
+    if (!savedSnapshot) {
+      continue;
+    }
 
-    transaction.update(docRef, storedScene);
+    FirebaseSceneVersionCache.set(socket, storedElements);
+    return toBrandedType<RemoteExcalidrawElement[]>([...storedElements]);
+  }
 
-    // Return the stored elements as the in memory `reconciledElements` could have mutated in the meantime
-    return storedScene;
-  });
-
-  const storedElements = getSyncableElements(
-    restoreElements(await decryptElements(storedScene, roomKey), null),
-  );
-
-  FirebaseSceneVersionCache.set(socket, storedElements);
-
-  return toBrandedType<RemoteExcalidrawElement[]>(storedElements);
+  throw new Error("room snapshot save conflict");
 };
 
 export const loadFromFirebase = async (
@@ -273,17 +373,18 @@ export const loadFromFirebase = async (
   roomKey: string,
   socket: Socket | null,
 ): Promise<readonly SyncableExcalidrawElement[] | null> => {
-  const firestore = _getFirestore();
-  const docRef = doc(firestore, "scenes", roomId);
-  const docSnap = await getDoc(docRef);
-  if (!docSnap.exists()) {
+  const snapshot = await loadRoomSnapshot(roomId);
+  if (!snapshot) {
     return null;
   }
-  const storedScene = docSnap.data() as FirebaseStoredScene;
   const elements = getSyncableElements(
-    restoreElements(await decryptElements(storedScene, roomKey), null, {
-      deleteInvisibleElements: true,
-    }),
+    restoreElements(
+      await decryptElements(decodeRoomSnapshot(snapshot), roomKey),
+      null,
+      {
+        deleteInvisibleElements: true,
+      },
+    ),
   );
 
   if (socket) {
@@ -308,10 +409,15 @@ export const loadFilesFromFirebase = async (
         // firebasestorage.googleapis.com (which doesn't exist here).
         const storageHost = import.meta.env.VITE_APP_FIRESTORE_EMULATOR_HOST;
         const base = storageHost
-          ? `http://${storageHost}/v0/b/${FIREBASE_CONFIG.storageBucket}`
+          ? `/v0/b/${FIREBASE_CONFIG.storageBucket}`
           : `https://firebasestorage.googleapis.com/v0/b/${FIREBASE_CONFIG.storageBucket}`;
-        const url = `${base}/o/${encodeURIComponent(prefix.replace(/^\//, ""))}%2F${id}`;
-        const response = await fetch(`${url}?alt=media`);
+        const url = `${base}/o/${encodeURIComponent(
+          prefix.replace(/^\//, ""),
+        )}%2F${id}`;
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${url}?alt=media`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
         if (response.status < 400) {
           const arrayBuffer = await response.arrayBuffer();
 

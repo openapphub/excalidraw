@@ -6,8 +6,9 @@
     Roboto, Helvetica, Arial, sans-serif;
   font-family: var(--ui-font);
   background: var(--island-bg-color, #fff);
-  border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--default-border-color, #dedee5);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(27, 27, 31, 0.22);
   width: 100%;
   max-width: 600px;
   max-height: 70vh;
@@ -62,18 +63,9 @@
 }
 
 .close {
-  background: none;
-  border: none;
-  padding: 8px;
-  cursor: pointer;
-  color: var(--icon-fill-color, #5f5f5f);
-  border-radius: 6px;
-  transition: background-color 0.15s;
-  flex-shrink: 0;
+  @include icon-button(32px);
 
-  &:hover {
-    background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
-  }
+  flex-shrink: 0;
 
   svg {
     width: 18px;
@@ -189,6 +181,8 @@
   text-align: left;
   transition: background-color 0.1s;
 
+  @include focus-visible-ring;
+
   &:hover {
     background: var(--color-primary-light, #f0f0ff);
   }
@@ -235,12 +229,14 @@
   border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
-  background: var(--default-bg-color, #f0f0f0);
+  background: #fff;
+  border: 1px solid var(--default-border-color, #e5e5e5);
 
   img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    background: #fff;
   }
 }
 
@@ -289,23 +285,11 @@
   font-weight: 500;
 }
 
-.itemBadge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--icon-fill-color, #5f5f5f);
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-}
-
 // Dark mode
 @include dark-mode {
   .modal {
     background: var(--island-bg-color, #232329);
+    border-color: var(--default-border-color, #3d3d3d);
   }
 
   .overlay {
@@ -374,7 +358,8 @@
   }
 
   .itemThumbnail {
-    background: var(--default-bg-color, #2d2d33);
+    background: #fff;
+    border-color: var(--default-border-color, #3d3d3d);
   }
 
   .itemThumbnailPlaceholder {
@@ -392,8 +377,23 @@
   .itemMeta {
     color: var(--text-secondary-color, #9b9b9b);
   }
+}
 
-  .itemBadge {
-    color: var(--icon-fill-color, #9b9b9b);
+@media (max-width: 640px) {
+  .overlay {
+    padding: 16px;
+    align-items: flex-start;
+  }
+
+  .modal {
+    max-height: calc(100vh - 32px);
+  }
+
+  .hints {
+    display: none;
+  }
+
+  .item {
+    padding-inline: 14px;
   }
 }

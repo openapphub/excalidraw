@@ -4,6 +4,7 @@ export const INITIAL_SCENE_UPDATE_TIMEOUT = 5000;
 export const FILE_UPLOAD_TIMEOUT = 300;
 export const LOAD_IMAGES_TIMEOUT = 500;
 export const SYNC_FULL_SCENE_INTERVAL_MS = 20000;
+export const COLLAB_SNAPSHOT_SAVE_INTERVAL_MS = 3000;
 export const SYNC_BROWSER_TABS_TIMEOUT = 50;
 export const CURSOR_SYNC_TIMEOUT = 33; // ~30fps
 export const DELETED_ELEMENT_TIMEOUT = 24 * 60 * 60 * 1000; // 1 day
@@ -15,6 +16,7 @@ export const FILE_CACHE_MAX_AGE_SEC = 31536000;
 export const CREATIONS_SIDEBAR_NAME = "creations";
 
 export const WS_EVENTS = {
+  ROOM_JOINED: "room-joined",
   SERVER_VOLATILE: "server-volatile-broadcast",
   SERVER: "server-broadcast",
   USER_FOLLOW_CHANGE: "user-follow",

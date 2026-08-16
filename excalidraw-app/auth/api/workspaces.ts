@@ -3,6 +3,7 @@
  */
 
 import { apiRequest, apiRequestRaw, jsonBody } from "./client";
+import { sceneClientHeaders } from "../sceneClient";
 
 import type { Workspace, WorkspaceType } from "./types";
 
@@ -78,6 +79,7 @@ export async function deleteWorkspace(
 ): Promise<{ success: boolean }> {
   return apiRequest(`/workspaces/${workspaceId}`, {
     method: "DELETE",
+    headers: sceneClientHeaders(),
     errorMessage: "Failed to delete workspace",
   });
 }

@@ -160,8 +160,15 @@ export function useAiCanvasSync(
       if (closed) {
         return;
       }
+      const token = localStorage.getItem("token");
+      if (!token) {
+        return;
+      }
       const nextSocket = new WebSocket(
-        `${protocol}//${window.location.host}/ws`,
+        `${protocol}//${window.location.host}/ws?canvasId=${encodeURIComponent(
+          currentCanvasId,
+        )}`,
+        ["excalidraw-auth", token],
       );
       socket = nextSocket;
       nextSocket.onmessage = handleMessage;

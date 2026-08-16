@@ -35,9 +35,10 @@ export type RecordingStateCallback = (state: RecordingState) => void;
  * Get available video input devices (cameras)
  */
 export async function getVideoDevices(): Promise<RecordingDevice[]> {
+  let stream: MediaStream | null = null;
   try {
     // Request permission first to get device labels
-    await navigator.mediaDevices.getUserMedia({ video: true });
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
     const devices = await navigator.mediaDevices.enumerateDevices();
     return devices
       .filter((device) => device.kind === "videoinput")
@@ -48,6 +49,8 @@ export async function getVideoDevices(): Promise<RecordingDevice[]> {
   } catch (error) {
     console.warn("Failed to get video devices:", error);
     return [];
+  } finally {
+    stream?.getTracks().forEach((track) => track.stop());
   }
 }
 
@@ -55,9 +58,10 @@ export async function getVideoDevices(): Promise<RecordingDevice[]> {
  * Get available audio input devices (microphones)
  */
 export async function getAudioDevices(): Promise<RecordingDevice[]> {
+  let stream: MediaStream | null = null;
   try {
     // Request permission first to get device labels
-    await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const devices = await navigator.mediaDevices.enumerateDevices();
     return devices
       .filter((device) => device.kind === "audioinput")
@@ -68,6 +72,8 @@ export async function getAudioDevices(): Promise<RecordingDevice[]> {
   } catch (error) {
     console.warn("Failed to get audio devices:", error);
     return [];
+  } finally {
+    stream?.getTracks().forEach((track) => track.stop());
   }
 }
 
@@ -391,6 +397,7 @@ export class TalktrackRecorder {
         await this.initAudio(this.options.audioDeviceId);
       }
     } catch (error) {
+      this.cleanup();
       this.updateState({
         status: "error",
         error: error instanceof Error ? error.message : "准备录制失败",
@@ -411,6 +418,7 @@ export class TalktrackRecorder {
       throw new Error("Compositor canvas not initialized");
     }
 
+    let combinedStream: MediaStream | null = null;
     try {
       // Create combined stream from compositor canvas
       const canvasStream = this.compositorCanvas.captureStream(
@@ -424,7 +432,7 @@ export class TalktrackRecorder {
         tracks.push(...audioTracks);
       }
 
-      const combinedStream = new MediaStream(tracks);
+      combinedStream = new MediaStream(tracks);
 
       // Set up MediaRecorder
       const mimeType = getSupportedMimeType();
@@ -459,10 +467,11 @@ export class TalktrackRecorder {
       this.drawFrame();
       this.startDurationTimer();
     } catch (error) {
+      combinedStream?.getTracks().forEach((track) => track.stop());
+      this.cleanup();
       this.updateState({
         status: "error",
-        error:
-          error instanceof Error ? error.message : "开始录制失败",
+        error: error instanceof Error ? error.message : "开始录制失败",
       });
       throw error;
     }

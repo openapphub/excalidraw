@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { t } from "@excalidraw/excalidraw/i18n";
 
 import {
@@ -34,41 +34,67 @@ export const MembersPage: React.FC<MembersPageProps> = ({
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>("MEMBER");
   const [searchQuery, setSearchQuery] = useState("");
+  const workspaceIdRef = useRef(workspaceId);
+  const loadSequenceRef = useRef(0);
+  workspaceIdRef.current = workspaceId;
 
   const loadMembers = useCallback(async () => {
     if (!workspaceId) {
+      setMembers([]);
+      setIsLoading(false);
       return;
     }
+    const requestWorkspaceId = workspaceId;
+    const requestSequence = ++loadSequenceRef.current;
+    const isCurrentRequest = () =>
+      workspaceIdRef.current === requestWorkspaceId &&
+      loadSequenceRef.current === requestSequence;
 
     setIsLoading(true);
     setError(null);
     try {
-      const data = await listWorkspaceMembers(workspaceId);
-      setMembers(data);
+      const data = await listWorkspaceMembers(requestWorkspaceId);
+      if (isCurrentRequest()) {
+        setMembers(data);
+      }
     } catch (err: any) {
-      setError(err.message || "Failed to load members");
+      if (isCurrentRequest()) {
+        setError(err.message || "Failed to load members");
+      }
     } finally {
-      setIsLoading(false);
+      if (isCurrentRequest()) {
+        setIsLoading(false);
+      }
     }
   }, [workspaceId]);
 
   useEffect(() => {
-    loadMembers();
-  }, [loadMembers]);
+    setMembers([]);
+    setInviteLink(null);
+    setShowInviteDialog(false);
+    setSearchQuery("");
+    void loadMembers();
+  }, [workspaceId, loadMembers]);
 
   const handleRoleChange = async (memberId: string, newRole: WorkspaceRole) => {
     if (!workspaceId) {
       return;
     }
+    const requestWorkspaceId = workspaceId;
 
     try {
-      await updateMemberRole(workspaceId, memberId, newRole);
+      await updateMemberRole(requestWorkspaceId, memberId, newRole);
+      if (workspaceIdRef.current !== requestWorkspaceId) {
+        return;
+      }
       setMembers((prev) =>
         prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m)),
       );
       showSuccess(t("settings.roleUpdated"));
     } catch (err: any) {
-      setError(err.message || "Failed to update role");
+      if (workspaceIdRef.current === requestWorkspaceId) {
+        setError(err.message || "Failed to update role");
+      }
     }
   };
 
@@ -76,16 +102,22 @@ export const MembersPage: React.FC<MembersPageProps> = ({
     if (!workspaceId) {
       return;
     }
+    const requestWorkspaceId = workspaceId;
     if (!confirm(t("settings.confirmRemoveMember", { name: memberName }))) {
       return;
     }
 
     try {
-      await removeMember(workspaceId, memberId);
+      await removeMember(requestWorkspaceId, memberId);
+      if (workspaceIdRef.current !== requestWorkspaceId) {
+        return;
+      }
       setMembers((prev) => prev.filter((m) => m.id !== memberId));
       showSuccess(t("settings.memberRemoved"));
     } catch (err: any) {
-      setError(err.message || "Failed to remove member");
+      if (workspaceIdRef.current === requestWorkspaceId) {
+        setError(err.message || "Failed to remove member");
+      }
     }
   };
 
@@ -93,20 +125,26 @@ export const MembersPage: React.FC<MembersPageProps> = ({
     if (!workspaceId) {
       return;
     }
+    const requestWorkspaceId = workspaceId;
 
     try {
       // Calculate expiration date (7 days from now)
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
 
-      const link = await createInviteLink(workspaceId, {
+      const link = await createInviteLink(requestWorkspaceId, {
         role: inviteRole,
         expiresAt: expiresAt.toISOString(),
       });
+      if (workspaceIdRef.current !== requestWorkspaceId) {
+        return;
+      }
       const fullUrl = `${window.location.origin}/invite/${link.code}`;
       setInviteLink(fullUrl);
     } catch (err: any) {
-      setError(err.message || "Failed to create invite link");
+      if (workspaceIdRef.current === requestWorkspaceId) {
+        setError(err.message || "Failed to create invite link");
+      }
     }
   };
 

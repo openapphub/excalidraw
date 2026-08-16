@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { t } from "@excalidraw/excalidraw/i18n";
+import { openConfirmModal } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirmState";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { showError, showSuccess } from "../utils/toast";
@@ -29,6 +30,9 @@ interface UseSceneActionsOptions {
    * Useful for updating the current scene title in the header.
    */
   onSceneRenamed?: (sceneId: string, newTitle: string) => void;
+
+  /** 删除成功后的路由收尾，例如离开已删除的当前 Scene。 */
+  onSceneDeleted?: (sceneId: string) => void;
 }
 
 interface UseSceneActionsResult {
@@ -98,6 +102,7 @@ export function useSceneActions({
   workspaceId,
   collectionId,
   onSceneRenamed,
+  onSceneDeleted,
 }: UseSceneActionsOptions): UseSceneActionsResult {
   const queryClient = useQueryClient();
 
@@ -121,7 +126,7 @@ export function useSceneActions({
     onMutate: async (sceneId: string) => {
       const queryKey = getQueryKey();
       if (!queryKey) {
-        return { previousScenes: undefined };
+        return { queryKey: null, previousScenes: undefined };
       }
 
       // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
@@ -136,20 +141,27 @@ export function useSceneActions({
         old ? old.filter((s) => s.id !== sceneId) : [],
       );
 
-      return { previousScenes };
+      return { queryKey, previousScenes };
     },
     onError: (_err, _sceneId, context) => {
       // Rollback to the previous value on error
-      const queryKey = getQueryKey();
-      if (queryKey && context?.previousScenes) {
-        queryClient.setQueryData(queryKey, context.previousScenes);
+      if (context?.queryKey && context.previousScenes) {
+        queryClient.setQueryData(context.queryKey, context.previousScenes);
       }
       console.error("Failed to delete scene:", _err);
       showError(t("workspace.deleteSceneError") || "Failed to delete scene");
     },
+    onSuccess: (sceneId) => {
+      onSceneDeleted?.(sceneId);
+    },
     onSettled: () => {
-      // Always invalidate to ensure fresh data
-      queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.all }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.notifications.all,
+        }),
+      ]);
     },
   });
 
@@ -171,7 +183,7 @@ export function useSceneActions({
     onMutate: async ({ sceneId, newTitle }) => {
       const queryKey = getQueryKey();
       if (!queryKey) {
-        return { previousScenes: undefined };
+        return { queryKey: null, previousScenes: undefined };
       }
 
       // Cancel any outgoing refetches
@@ -188,16 +200,15 @@ export function useSceneActions({
           : [],
       );
 
-      return { previousScenes };
+      return { queryKey, previousScenes };
     },
-    onSuccess: (updatedScene, { sceneId, newTitle }) => {
+    onSuccess: (updatedScene, { sceneId, newTitle }, context) => {
       // Call the callback if provided
       onSceneRenamed?.(sceneId, newTitle);
 
       // Update cache with the actual server response (has correct updatedAt, etc.)
-      const queryKey = getQueryKey();
-      if (queryKey) {
-        queryClient.setQueryData<WorkspaceScene[]>(queryKey, (old) =>
+      if (context?.queryKey) {
+        queryClient.setQueryData<WorkspaceScene[]>(context.queryKey, (old) =>
           old
             ? old.map((s) => (s.id === updatedScene.id ? updatedScene : s))
             : [],
@@ -206,16 +217,17 @@ export function useSceneActions({
     },
     onError: (_err, _variables, context) => {
       // Rollback to the previous value on error
-      const queryKey = getQueryKey();
-      if (queryKey && context?.previousScenes) {
-        queryClient.setQueryData(queryKey, context.previousScenes);
+      if (context?.queryKey && context.previousScenes) {
+        queryClient.setQueryData(context.queryKey, context.previousScenes);
       }
       console.error("Failed to rename scene:", _err);
       showError(t("workspace.renameSceneError") || "Failed to rename scene");
     },
     onSettled: () => {
-      // Always invalidate to ensure fresh data
-      queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.all }),
+      ]);
     },
   });
 
@@ -224,15 +236,15 @@ export function useSceneActions({
   // ============================================
   const duplicateMutation = useMutation({
     mutationKey: queryKeys.mutations.duplicateScene,
+    onMutate: () => ({ queryKey: getQueryKey() }),
     mutationFn: async (sceneId: string) => {
       const newScene = await duplicateSceneApi(sceneId);
       return newScene;
     },
-    onSuccess: (newScene) => {
+    onSuccess: (newScene, _sceneId, context) => {
       // Add the new scene to the cache
-      const queryKey = getQueryKey();
-      if (queryKey) {
-        queryClient.setQueryData<WorkspaceScene[]>(queryKey, (old) =>
+      if (context?.queryKey) {
+        queryClient.setQueryData<WorkspaceScene[]>(context.queryKey, (old) =>
           old ? [newScene, ...old] : [newScene],
         );
       }
@@ -245,8 +257,10 @@ export function useSceneActions({
       );
     },
     onSettled: () => {
-      // Always invalidate to ensure fresh data
-      queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.scenes.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.all }),
+      ]);
     },
   });
 
@@ -256,8 +270,13 @@ export function useSceneActions({
 
   const deleteScene = useCallback(
     async (sceneId: string): Promise<boolean> => {
-      // Show confirmation dialog
-      if (!confirm(t("workspace.confirmDeleteScene"))) {
+      const confirmed = await openConfirmModal({
+        title: t("workspace.deleteScene"),
+        description: t("workspace.confirmDeleteScene"),
+        actionLabel: t("workspace.deleteScene"),
+        color: "danger",
+      });
+      if (!confirmed) {
         return false;
       }
 

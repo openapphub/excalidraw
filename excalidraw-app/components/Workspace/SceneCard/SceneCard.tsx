@@ -70,6 +70,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const [renameValue, setRenameValue] = useState(scene.title);
   const menuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const openedOnPointerDownAtRef = useRef<number | null>(null);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -133,6 +134,28 @@ export const SceneCard: React.FC<SceneCardProps> = ({
     setMenuOpen(true);
   };
 
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (
+      !isActive ||
+      !e.isPrimary ||
+      e.button !== 0 ||
+      (e.target as HTMLElement).closest("button, input")
+    ) {
+      return;
+    }
+    openedOnPointerDownAtRef.current = e.timeStamp;
+    onOpen();
+  };
+
+  const handleOpenClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const openedAt = openedOnPointerDownAtRef.current;
+    openedOnPointerDownAtRef.current = null;
+    if (openedAt !== null && e.timeStamp - openedAt < 1000) {
+      return;
+    }
+    onOpen();
+  };
+
   const handleRenameClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setMenuOpen(false);
@@ -175,7 +198,8 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   return (
     <div
       className={`${styles.card} ${isActive ? styles.active : ""}`}
-      onClick={onOpen}
+      onPointerDown={handlePointerDown}
+      onClick={handleOpenClick}
       onContextMenu={handleContextMenu}
       role="button"
       tabIndex={0}
@@ -205,8 +229,15 @@ export const SceneCard: React.FC<SceneCardProps> = ({
           ) : (
             <h3 className={styles.title}>{scene.title}</h3>
           )}
-          {!scene.isPublic && !isRenaming && (
-            <span className={styles.private} title={t("workspace.private")}>
+          {scene.editor && !isRenaming && (
+            <span
+              className={styles.editLock}
+              title={
+                scene.editor.isSelf
+                  ? "你正在编辑"
+                  : `${scene.editor.name || "其他成员"} 正在编辑`
+              }
+            >
               {lockIcon}
             </span>
           )}

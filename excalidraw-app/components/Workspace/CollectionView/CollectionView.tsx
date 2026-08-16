@@ -213,15 +213,19 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
 
       {/* Action buttons */}
       <div className={styles.actions}>
-        <button className={styles.actionButton} onClick={handleImportScenes}>
+        <button
+          className={styles.actionButtonSecondary}
+          onClick={handleImportScenes}
+        >
           {importIcon}
           <span>{t("workspace.importScenes")}</span>
-          {plusIcon}
         </button>
-        <button className={styles.actionButton} onClick={handleCreateScene}>
+        <button
+          className={styles.actionButtonPrimary}
+          onClick={handleCreateScene}
+        >
           {plusIcon}
           <span>{t("workspace.createScene")}</span>
-          {plusIcon}
         </button>
       </div>
 

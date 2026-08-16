@@ -237,8 +237,6 @@ const LayerUI = ({
     <div style={{ position: "relative" }}>
       <div className="excalidraw-ui-top-left">
         <tunnels.MainMenuTunnel.Out />
-        {/* AstraDraw: workspace sidebar trigger before hamburger menu */}
-        <tunnels.WorkspaceTriggerTunnel.Out />
         {renderTopLeftUI?.(false, appState)}
       </div>
       {renderWelcomeScreen && <tunnels.WelcomeScreenMenuHintTunnel.Out />}

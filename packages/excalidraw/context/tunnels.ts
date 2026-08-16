@@ -12,7 +12,6 @@ type TunnelsContextValue = {
   WelcomeScreenCenterTunnel: Tunnel;
   FooterCenterTunnel: Tunnel;
   FooterLeftExtraTunnel: Tunnel;
-  WorkspaceTriggerTunnel: Tunnel; // AstraDraw: workspace sidebar trigger (before hamburger menu)
   DefaultSidebarTriggerTunnel: Tunnel;
   DefaultSidebarTabTriggersTunnel: Tunnel;
   OverwriteConfirmDialogTunnel: Tunnel;
@@ -38,7 +37,6 @@ export const useInitializeTunnels = () => {
       WelcomeScreenCenterTunnel: tunnel(),
       FooterCenterTunnel: tunnel(),
       FooterLeftExtraTunnel: tunnel(),
-      WorkspaceTriggerTunnel: tunnel(), // AstraDraw: workspace sidebar trigger
       DefaultSidebarTriggerTunnel: tunnel(),
       DefaultSidebarTabTriggersTunnel: tunnel(),
       OverwriteConfirmDialogTunnel: tunnel(),

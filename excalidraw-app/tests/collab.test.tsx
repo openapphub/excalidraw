@@ -1,4 +1,5 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   createRedoAction,
   createUndoAction,
@@ -6,16 +7,30 @@ import {
 import { syncInvalidIndices } from "@excalidraw/element";
 import { API } from "@excalidraw/excalidraw/tests/helpers/api";
 import { act, render, waitFor } from "@excalidraw/excalidraw/tests/test-utils";
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
 
 import { StoreIncrement } from "@excalidraw/element";
 
 import type { DurableIncrement, EphemeralIncrement } from "@excalidraw/element";
 
 import ExcalidrawApp from "../App";
+import { appJotaiStore, currentCanvasIdAtom } from "../app-jotai";
 import { WS_SUBTYPES } from "../app_constants";
+import { isCollaboratingAtom } from "../collab/Collab";
+import {
+  currentSceneCanEditAtom,
+  currentSceneIdAtom,
+} from "../components/Settings/settingsState";
+import { queryClient } from "../lib/queryClient";
 
 const { h } = window;
+
+const renderApp = () =>
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ExcalidrawApp />
+    </QueryClientProvider>,
+  );
 
 Object.defineProperty(window, "crypto", {
   value: {
@@ -28,38 +43,42 @@ Object.defineProperty(window, "crypto", {
   },
 });
 
-vi.mock("../../excalidraw-app/data/firebase.ts", () => {
-  const loadFromFirebase = async () => null;
-  const saveToFirebase = () => {};
-  const isSavedToFirebase = () => true;
-  const loadFilesFromFirebase = async () => ({
+const firebaseMocks = vi.hoisted(() => ({
+  loadFromFirebase: vi.fn(async (): Promise<readonly any[] | null> => null),
+  saveToFirebase: vi.fn(async () => null),
+  isSavedToFirebase: vi.fn(() => true),
+  loadFilesFromFirebase: vi.fn(async () => ({
     loadedFiles: [],
     erroredFiles: [],
-  });
-  const saveFilesToFirebase = async () => ({
+  })),
+  saveFilesToFirebase: vi.fn(async () => ({
     savedFiles: new Map(),
     erroredFiles: new Map(),
-  });
+  })),
+}));
 
-  return {
-    loadFromFirebase,
-    saveToFirebase,
-    isSavedToFirebase,
-    loadFilesFromFirebase,
-    saveFilesToFirebase,
-  };
-});
+const socketMocks = vi.hoisted(() => ({
+  sockets: [] as any[],
+}));
+
+vi.mock("../../excalidraw-app/data/firebase.ts", () => firebaseMocks);
 
 vi.mock("socket.io-client", () => {
   return {
     default: () => {
-      return {
-        close: () => {},
-        on: () => {},
-        once: () => {},
-        off: () => {},
-        emit: () => {},
+      const socket = {
+        connected: false,
+        close: vi.fn(),
+        connect: vi.fn(() => {
+          socket.connected = true;
+        }),
+        on: vi.fn(),
+        once: vi.fn(),
+        off: vi.fn(),
+        emit: vi.fn(),
       };
+      socketMocks.sockets.push(socket);
+      return socket;
     },
   };
 });
@@ -70,8 +89,55 @@ vi.mock("socket.io-client", () => {
  * i.e. multiplayer history tests could be a good first candidate, as we could test both history stacks simultaneously.
  */
 describe("collaboration", () => {
+  beforeEach(() => {
+    window.history.replaceState({}, "", "/");
+    appJotaiStore.set(isCollaboratingAtom, false);
+    firebaseMocks.loadFromFirebase.mockReset().mockResolvedValue(null);
+    firebaseMocks.saveToFirebase.mockReset().mockResolvedValue(null);
+    socketMocks.sockets.length = 0;
+  });
+
+  it("连接前注册房间初始化监听器，避免错过旧成员 INIT", async () => {
+    await renderApp();
+
+    const roomLinkData = {
+      roomId: "0123456789abcdefabcd",
+      roomKey: "jUgf6TAAvOrLXbsmq4Hpnw",
+    };
+    window.history.replaceState(
+      {},
+      "",
+      `#room=${roomLinkData.roomId},${roomLinkData.roomKey}`,
+    );
+
+    let pendingCollaboration = Promise.resolve<unknown>(null);
+    await act(async () => {
+      window.collab.setUsername("测试用户");
+      pendingCollaboration = window.collab.startCollaboration(roomLinkData);
+      await waitFor(() => {
+        expect(socketMocks.sockets).toHaveLength(1);
+        expect(socketMocks.sockets[0].connect).toHaveBeenCalledTimes(1);
+      });
+
+      const socket = socketMocks.sockets[0];
+      const connectOrder = socket.connect.mock.invocationCallOrder[0];
+      for (const eventName of ["client-broadcast", "first-in-room"]) {
+        const listenerIndex = socket.on.mock.calls.findIndex(
+          ([registeredEvent]: [string]) => registeredEvent === eventName,
+        );
+        expect(listenerIndex).toBeGreaterThanOrEqual(0);
+        expect(socket.on.mock.invocationCallOrder[listenerIndex]).toBeLessThan(
+          connectOrder,
+        );
+      }
+
+      (window.collab as any).destroySocketClient();
+      await pendingCollaboration;
+    });
+  });
+
   it("should replace the scene and broadcast a full replacement init", async () => {
-    await render(<ExcalidrawApp />);
+    await renderApp();
 
     const previousElement = API.createElement({
       type: "rectangle",
@@ -93,10 +159,22 @@ describe("collaboration", () => {
 
     const broadcastSpy = vi
       .spyOn(window.collab.portal, "_broadcastSocketData")
-      .mockResolvedValue(undefined);
+      .mockResolvedValue(true);
     const saveSpy = vi
       .spyOn(window.collab, "saveCollabRoomToFirebase")
       .mockResolvedValue(undefined);
+    window.history.replaceState(
+      {},
+      "",
+      "#room=0123456789abcdefabcd,jUgf6TAAvOrLXbsmq4Hpnw",
+    );
+    Object.assign(window.collab.portal, {
+      socket: { close: vi.fn(), connected: true },
+      roomId: "0123456789abcdefabcd",
+      roomKey: "jUgf6TAAvOrLXbsmq4Hpnw",
+      realtimeState: "live",
+      snapshotInitialized: true,
+    });
 
     await act(async () => {
       await window.collab.replaceScene({
@@ -120,11 +198,290 @@ describe("collaboration", () => {
     );
   });
 
+  it("临时房间不受残留 Workspace Scene 状态阻断", async () => {
+    await renderApp();
+
+    act(() => {
+      appJotaiStore.set(currentCanvasIdAtom, "stale-workspace-scene");
+      appJotaiStore.set(currentSceneIdAtom, null);
+      appJotaiStore.set(currentSceneCanEditAtom, false);
+      appJotaiStore.set(isCollaboratingAtom, true);
+    });
+
+    const broadcastSpy = vi.spyOn(window.collab as any, "broadcastElements");
+    const element = API.createElement({
+      type: "rectangle",
+      id: "temporary-room-element",
+      width: 100,
+      height: 100,
+    });
+
+    API.updateScene({
+      elements: [element],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+
+    await waitFor(() => {
+      expect(broadcastSpy).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "temporary-room-element" }),
+      ]);
+    });
+  });
+
+  it("旧房间快照晚到时不初始化新房间", async () => {
+    await renderApp();
+
+    let resolveLoad: (elements: readonly any[] | null) => void = () => {};
+    firebaseMocks.loadFromFirebase.mockImplementationOnce(
+      () =>
+        new Promise<readonly any[] | null>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+    const oldSocket = { connected: true, close: vi.fn(), off: vi.fn() };
+    window.history.replaceState(
+      {},
+      "",
+      "#room=0123456789abcdefabcd,jUgf6TAAvOrLXbsmq4Hpnw",
+    );
+    Object.assign(window.collab.portal, {
+      socket: oldSocket,
+      roomId: "0123456789abcdefabcd",
+      roomKey: "jUgf6TAAvOrLXbsmq4Hpnw",
+      realtimeState: "live",
+      snapshotInitialized: false,
+    });
+    const session = (window.collab as any).captureCollabSession();
+    let pending: Promise<unknown> = Promise.resolve(null);
+    await act(async () => {
+      pending = (window.collab as any).initializeRoom({
+        fetchScene: true,
+        roomLinkData: {
+          roomId: "0123456789abcdefabcd",
+          roomKey: "jUgf6TAAvOrLXbsmq4Hpnw",
+        },
+        session,
+      });
+    });
+
+    const newSocket = { connected: true, close: vi.fn(), off: vi.fn() };
+    window.history.replaceState(
+      {},
+      "",
+      "#room=abcdef0123456789abcd,1234567890123456789012",
+    );
+    Object.assign(window.collab.portal, {
+      socket: newSocket,
+      roomId: "abcdef0123456789abcd",
+      roomKey: "1234567890123456789012",
+      realtimeState: "live",
+      snapshotInitialized: false,
+    });
+    let result: unknown;
+    await act(async () => {
+      resolveLoad([
+        API.createElement({
+          type: "rectangle",
+          id: "old-room-element",
+          width: 100,
+          height: 100,
+        }),
+      ]);
+      result = await pending;
+    });
+
+    expect(result).toBeNull();
+    expect(window.collab.portal.snapshotInitialized).toBe(false);
+    expect(h.elements).not.toEqual([
+      expect.objectContaining({ id: "old-room-element" }),
+    ]);
+  });
+
+  it("单人临时房间也会提交尾随快照", async () => {
+    await renderApp();
+
+    window.history.replaceState(
+      {},
+      "",
+      "#room=0123456789abcdefabcd,jUgf6TAAvOrLXbsmq4Hpnw",
+    );
+    Object.assign(window.collab.portal, {
+      socket: { id: "self-socket", close: vi.fn(), connected: true },
+      roomId: "0123456789abcdefabcd",
+      roomKey: "jUgf6TAAvOrLXbsmq4Hpnw",
+      realtimeState: "live",
+      snapshotInitialized: true,
+    });
+    const saveSpy = vi
+      .spyOn(window.collab, "saveCollabRoomToFirebase")
+      .mockResolvedValue(undefined);
+
+    window.collab.queueSaveToFirebase();
+    window.collab.queueSaveToFirebase.flush();
+
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("连续元素变化不会绕过完整场景广播节流", async () => {
+    await renderApp();
+
+    Object.assign(window.collab.portal, {
+      socket: { id: "self-socket", close: vi.fn(), connected: true },
+      roomId: "0123456789abcdefabcd",
+      roomKey: "jUgf6TAAvOrLXbsmq4Hpnw",
+      realtimeState: "live",
+      snapshotInitialized: true,
+    });
+    act(() => {
+      window.collab.setCollaborators(["self-socket", "peer-socket"] as any);
+    });
+    window.collab.setLastBroadcastedOrReceivedSceneVersion(-1);
+    window.collab.queueBroadcastAllElements.cancel();
+
+    const [first] = syncInvalidIndices([
+      API.createElement({
+        type: "rectangle",
+        id: "resized-element",
+        width: 100,
+        height: 100,
+      }),
+    ]);
+    const second = newElementWith(first, { width: 200, height: 200 });
+    const third = newElementWith(second, { width: 300, height: 300 });
+    const broadcastSpy = vi
+      .spyOn(window.collab.portal, "broadcastScene")
+      .mockResolvedValue(true);
+
+    window.collab.broadcastElements([first]);
+    window.collab.broadcastElements([second]);
+    window.collab.broadcastElements([third]);
+
+    const incrementalCalls = broadcastSpy.mock.calls.filter(
+      ([, , syncAll]) => syncAll === false,
+    );
+    const fullSceneCalls = broadcastSpy.mock.calls.filter(
+      ([, , syncAll]) => syncAll === true,
+    );
+    expect(incrementalCalls).toHaveLength(3);
+    expect(fullSceneCalls).toHaveLength(1);
+
+    window.collab.queueBroadcastAllElements.cancel();
+  });
+
+  it("快照 CAS 合并结果不会反向覆盖实时画布", async () => {
+    await renderApp();
+
+    const localElement = API.createElement({
+      type: "rectangle",
+      id: "local-element",
+      width: 100,
+      height: 100,
+    });
+    const persistedElement = API.createElement({
+      type: "diamond",
+      id: "persisted-element",
+      width: 200,
+      height: 120,
+    });
+    window.history.replaceState(
+      {},
+      "",
+      "#room=0123456789abcdefabcd,jUgf6TAAvOrLXbsmq4Hpnw",
+    );
+    Object.assign(window.collab.portal, {
+      socket: { id: "self-socket", close: vi.fn(), connected: true },
+      roomId: "0123456789abcdefabcd",
+      roomKey: "jUgf6TAAvOrLXbsmq4Hpnw",
+      realtimeState: "live",
+      snapshotInitialized: true,
+    });
+    firebaseMocks.saveToFirebase.mockResolvedValueOnce([
+      persistedElement,
+    ] as any);
+    const remoteUpdateSpy = vi.spyOn(
+      window.collab as any,
+      "handleRemoteSceneUpdate",
+    );
+
+    await act(async () => {
+      await window.collab.saveCollabRoomToFirebase([localElement] as any);
+    });
+
+    expect(firebaseMocks.saveToFirebase).toHaveBeenCalledTimes(1);
+    expect(remoteUpdateSpy).not.toHaveBeenCalled();
+    expect(h.elements).not.toEqual([
+      expect.objectContaining({ id: "persisted-element" }),
+    ]);
+  });
+
+  it("同一客户端的匿名房间快照按顺序保存", async () => {
+    await renderApp();
+
+    const firstElement = API.createElement({
+      type: "rectangle",
+      id: "first-element",
+      width: 100,
+      height: 100,
+    });
+    const secondElement = API.createElement({
+      type: "diamond",
+      id: "second-element",
+      width: 200,
+      height: 120,
+    });
+    window.history.replaceState(
+      {},
+      "",
+      "#room=0123456789abcdefabcd,jUgf6TAAvOrLXbsmq4Hpnw",
+    );
+    Object.assign(window.collab.portal, {
+      socket: { id: "self-socket", close: vi.fn(), connected: true },
+      roomId: "0123456789abcdefabcd",
+      roomKey: "jUgf6TAAvOrLXbsmq4Hpnw",
+      realtimeState: "live",
+      snapshotInitialized: true,
+    });
+
+    let resolveFirstSave: () => void = () => {};
+    firebaseMocks.saveToFirebase
+      .mockImplementationOnce(
+        () =>
+          new Promise<null>((resolve) => {
+            resolveFirstSave = () => resolve(null);
+          }),
+      )
+      .mockResolvedValueOnce(null);
+
+    const firstSave = window.collab.saveCollabRoomToFirebase([
+      firstElement,
+    ] as any);
+    const secondSave = window.collab.saveCollabRoomToFirebase([
+      secondElement,
+    ] as any);
+
+    await waitFor(() => {
+      expect(firebaseMocks.saveToFirebase).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      resolveFirstSave();
+      await firstSave;
+      await secondSave;
+    });
+
+    expect(firebaseMocks.saveToFirebase).toHaveBeenCalledTimes(2);
+    const secondCall = firebaseMocks.saveToFirebase.mock
+      .calls[1] as unknown as [unknown, readonly any[]];
+    expect(secondCall[1]).toEqual([
+      expect.objectContaining({ id: "second-element" }),
+    ]);
+  });
+
   it("should emit two ephemeral increments even though updates get batched", async () => {
     const durableIncrements: DurableIncrement[] = [];
     const ephemeralIncrements: EphemeralIncrement[] = [];
 
-    await render(<ExcalidrawApp />);
+    await renderApp();
 
     h.store.onStoreIncrementEmitter.on((increment) => {
       if (StoreIncrement.isDurable(increment)) {
@@ -194,7 +551,7 @@ describe("collaboration", () => {
   });
 
   it("should allow to undo / redo even on force-deleted elements", async () => {
-    await render(<ExcalidrawApp />);
+    await renderApp();
     const rect1Props = {
       type: "rectangle",
       id: "A",

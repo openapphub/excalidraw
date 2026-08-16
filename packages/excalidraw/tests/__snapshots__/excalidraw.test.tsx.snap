@@ -758,6 +758,66 @@ exports[`<Excalidraw/> > Test UIOptions prop > Test canvasActions > should rende
                 class="color-picker__button-outline"
               />
             </button>
+            <button
+              class="color-picker__button has-outline"
+              data-testid="color-top-pick-#e7f5ff"
+              data-top-pick-index="5"
+              style="--swatch-color: #e7f5ff;"
+              title="#e7f5ff"
+              type="button"
+            >
+              <div
+                class="color-picker__button-outline"
+              />
+            </button>
+            <button
+              class="color-picker__button has-outline"
+              data-testid="color-top-pick-#ebfbee"
+              data-top-pick-index="6"
+              style="--swatch-color: #ebfbee;"
+              title="#ebfbee"
+              type="button"
+            >
+              <div
+                class="color-picker__button-outline"
+              />
+            </button>
+            <button
+              class="color-picker__button has-outline"
+              data-testid="color-top-pick-#fff4e6"
+              data-top-pick-index="7"
+              style="--swatch-color: #fff4e6;"
+              title="#fff4e6"
+              type="button"
+            >
+              <div
+                class="color-picker__button-outline"
+              />
+            </button>
+            <button
+              class="color-picker__button has-outline"
+              data-testid="color-top-pick-#f3f0ff"
+              data-top-pick-index="8"
+              style="--swatch-color: #f3f0ff;"
+              title="#f3f0ff"
+              type="button"
+            >
+              <div
+                class="color-picker__button-outline"
+              />
+            </button>
+            <button
+              class="color-picker__button"
+              data-testid="color-top-pick-#ffe3e3"
+              data-top-pick-index="9"
+              style="--swatch-color: #ffe3e3;"
+              title="#ffe3e3"
+              type="button"
+            >
+              <div
+                class="color-picker__button-outline"
+              />
+            </button>
           </div>
           <div
             style="width: 1px; height: 1rem; margin: 0px auto;"

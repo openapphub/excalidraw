@@ -4,15 +4,13 @@
 @use "../../../styles/mixins" as *;
 
 .page {
-  // Define --ui-font locally since component is outside .excalidraw container
-  --ui-font: Assistant, system-ui, BlinkMacSystemFont, -apple-system, Segoe UI,
-    Roboto, Helvetica, Arial, sans-serif;
-  font-family: var(--ui-font);
+  @include workspace-page;
 
-  flex: 1;
-  padding: 32px 48px;
-  overflow-y: auto;
-  background: var(--default-bg-color, #fafafa);
+  > div {
+    width: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
+  }
 }
 
 .title {
@@ -31,9 +29,9 @@
 // Row layout
 .row {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 48px;
-  padding: 32px 0;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 32px;
+  padding: 24px 0;
   border-bottom: 1px solid var(--default-border-color, #e5e5e5);
 
   &:first-of-type {
@@ -50,7 +48,7 @@
     margin: 0 0 4px;
     font-size: 16px;
     font-weight: 600;
-    color: var(--color-primary, #6965db);
+    color: var(--text-primary-color, #1b1b1f);
   }
 
   p {
@@ -75,22 +73,12 @@
 }
 
 .themeDropdown {
-  padding: 8px 40px 8px 12px;
-  border: 1px solid var(--default-border-color, #e5e5e5);
-  border-radius: 6px;
-  background: var(--island-bg-color, #ffffff);
-  color: var(--text-primary-color, #1b1b1f);
-  font-size: 14px;
-  font-family: var(--ui-font);
+  @include field-control;
+
+  padding-right: 40px;
   cursor: pointer;
   appearance: none;
   min-width: 180px;
-
-  &:focus {
-    outline: none;
-    border-color: var(--color-primary, #6965db);
-    box-shadow: 0 0 0 3px rgba(105, 101, 219, 0.1);
-  }
 }
 
 .themeIcon {
@@ -114,8 +102,8 @@
 .drawingGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px 24px;
-  max-width: 520px;
+  gap: 16px;
+  max-width: 560px;
 }
 
 .drawingField {
@@ -147,7 +135,7 @@
 
   .rowLabel {
     h2 {
-      color: var(--color-primary, #a5a1ff);
+      color: var(--text-primary-color, #e1e1e1);
     }
 
     p {
@@ -168,5 +156,25 @@
 
   .themeIcon {
     color: var(--text-secondary-color, #9b9b9b);
+  }
+}
+
+@media (max-width: 800px) {
+  .page {
+    padding: 24px 16px 36px;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .drawingGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .themeSelector,
+  .themeDropdown {
+    width: 100%;
   }
 }

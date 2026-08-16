@@ -9,6 +9,8 @@
  */
 
 import { useState } from "react";
+
+import type { ReactNode } from "react";
 import { DefaultSidebar, Sidebar } from "@excalidraw/excalidraw";
 import { useUIAppState } from "@excalidraw/excalidraw/context/ui-appState";
 
@@ -79,10 +81,16 @@ const animationIcon = (
 
 export interface PresentationTalktrackMountProps {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
+  /**
+   * 将本模块的标签交给已有的 DefaultSidebar 宿主渲染。
+   * DefaultSidebar 同名实例不能并列挂载，否则后一个会遮住前一个的 Tab 内容。
+   */
+  renderSidebar?: (tabs: ReactNode) => ReactNode;
 }
 
 export const PresentationTalktrackMount = ({
   excalidrawAPI,
+  renderSidebar,
 }: PresentationTalktrackMountProps) => {
   const { openSidebar } = useUIAppState();
   const [isRecordingDialogOpen, setIsRecordingDialogOpen] = useState(false);
@@ -93,10 +101,9 @@ export const PresentationTalktrackMount = ({
     setIsRecordingDialogOpen(true);
   };
 
-  return (
+  const tabs = (
     <>
-      <DefaultSidebar>
-        <DefaultSidebar.TabTriggers>
+      <DefaultSidebar.TabTriggers>
           <Sidebar.TabTrigger
             tab="presentation"
             style={{
@@ -121,21 +128,25 @@ export const PresentationTalktrackMount = ({
           >
             {animationIcon}
           </Sidebar.TabTrigger>
-        </DefaultSidebar.TabTriggers>
-        <Sidebar.Tab tab="presentation">
-          <PresentationPanel excalidrawAPI={excalidrawAPI} />
-        </Sidebar.Tab>
-        <Sidebar.Tab tab="recording">
-          <TalktrackPanel
-            excalidrawAPI={excalidrawAPI}
-            onStartRecording={handleStartRecording}
-          />
-        </Sidebar.Tab>
-        <Sidebar.Tab tab="animation">
-          <AnimationPanel excalidrawAPI={excalidrawAPI} />
-        </Sidebar.Tab>
-      </DefaultSidebar>
+      </DefaultSidebar.TabTriggers>
+      <Sidebar.Tab tab="presentation">
+        <PresentationPanel excalidrawAPI={excalidrawAPI} />
+      </Sidebar.Tab>
+      <Sidebar.Tab tab="recording">
+        <TalktrackPanel
+          excalidrawAPI={excalidrawAPI}
+          onStartRecording={handleStartRecording}
+        />
+      </Sidebar.Tab>
+      <Sidebar.Tab tab="animation">
+        <AnimationPanel excalidrawAPI={excalidrawAPI} />
+      </Sidebar.Tab>
+    </>
+  );
 
+  return (
+    <>
+      {renderSidebar ? renderSidebar(tabs) : <DefaultSidebar>{tabs}</DefaultSidebar>}
       {/* 录制管理器：设置对话框 + 倒计时 + 工具栏（portal 到 body） */}
       <TalktrackManager
         excalidrawAPI={excalidrawAPI}

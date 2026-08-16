@@ -124,6 +124,7 @@ export interface WorkspaceScene {
   thumbnailUrl: string | null;
   storageKey: string;
   roomId: string | null;
+  workspaceId: string;
   collectionId: string | null;
   isPublic: boolean;
   lastOpenedAt: string | null;
@@ -143,7 +144,7 @@ export interface SceneEditor {
 export interface CreateSceneDto {
   title?: string;
   thumbnail?: string;
-  data?: string; // Base64 encoded scene data
+  data?: string; // 序列化后的 Excalidraw 场景 JSON
   collectionId?: string; // Collection to add the scene to
 }
 

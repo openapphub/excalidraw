@@ -1,5 +1,6 @@
 // PresentationControls - 演示模式控制栏
 // 从 AstraDraw CSS Module 转为普通 scss（本仓约定）
+@use "../../../styles/mixins" as *;
 
 .presentation-controls {
   position: fixed;
@@ -26,8 +27,8 @@
     gap: 4px;
     padding: 8px 12px;
     background: var(--island-bg-color, #fff);
-    border-radius: 12px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(27, 27, 31, 0.16);
     border: 1px solid var(--default-border-color, #e5e5e5);
   }
 
@@ -40,10 +41,12 @@
     padding: 0 8px;
     border: none;
     background: transparent;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
     color: var(--text-primary-color, #1b1b1f);
     transition: background-color 0.15s ease, opacity 0.15s ease;
+
+    @include focus-visible-ring;
 
     &:hover:not(:disabled) {
       background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));

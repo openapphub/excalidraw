@@ -356,6 +356,30 @@ export function getWorkspaceSlug(route: RouteType): string | null {
 }
 
 /**
+ * 仅替换 Workspace 路由中的 slug，保留当前页面、查询参数和 hash。
+ * 当前 URL 已切到其他 Workspace 时返回 null，避免旧 mutation 覆盖新路由。
+ */
+export function replaceWorkspaceSlugInUrl(
+  url: string,
+  expectedWorkspaceSlug: string,
+  nextWorkspaceSlug: string,
+): string | null {
+  const urlObj = new URL(url, window.location.origin);
+  const route = parseUrl(urlObj.href);
+  if (getWorkspaceSlug(route) !== expectedWorkspaceSlug) {
+    return null;
+  }
+
+  const pathSegments = urlObj.pathname.split("/");
+  if (pathSegments[1] !== "workspace" || pathSegments.length < 3) {
+    return null;
+  }
+  pathSegments[2] = encodeURIComponent(nextWorkspaceSlug);
+  urlObj.pathname = pathSegments.join("/");
+  return `${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
+}
+
+/**
  * Check if the route is a dashboard/collection view (not canvas)
  */
 export function isDashboardRoute(route: RouteType): boolean {

@@ -1128,6 +1128,7 @@
     "noMore": "No more notifications",
     "scrollForMore": "Scroll for more",
     "loading": "Loading notifications...",
+    "sceneUnavailable": "This canvas was deleted or you no longer have access.",
     "postedComment": "posted a comment in",
     "mentionedYou": "mentioned you in",
     "unread": "Unread"
